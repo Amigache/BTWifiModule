@@ -17,7 +17,7 @@
 
 
 #define MAX_BLE_ADDRESSES 20
-#define MIN_BLE_RSSI -85
+#define MIN_BLE_RSSI -100
 #define MAX_CHAR_TO_SCAN 15
 
 typedef enum {
@@ -33,6 +33,8 @@ typedef enum {
 typedef struct {
   esp_bd_addr_t addr;
   esp_ble_addr_type_t type;
+  int8_t rssi;
+  char name[32];
 } esp_bt_addr_t_rp;
 
 extern char *str_ble_board_types[BLE_BOARD_COUNT];

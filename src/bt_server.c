@@ -481,6 +481,15 @@ int btp_sendChannelData(uint8_t *data, int len)
   return 0;
 }
 
+void btp_disconnect()
+{
+  if (btp_connected) {
+    esp_ble_gatts_close(gl_profile_tab[PROFILE_TRAINER_SL_ID].gatts_if,
+                        gl_profile_tab[PROFILE_TRAINER_SL_ID].conn_id);
+  }
+  btp_connected = false;
+}
+
 void btpInit(void)
 {
   ESP_LOGI(GATTS_TAG, "Starting Peripherial");

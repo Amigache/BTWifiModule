@@ -218,6 +218,39 @@ int atcommandlen = -1;
 
 circular_buffer uartinbuf;
 
+// Web-triggered BLE scan (Central mode only)
+void webStartScan(void)
+{
+  if (curMode != ROLE_BLE_CENTRAL) return;
+  bt_scanned_address_cnt = 0;
+  btc_scan_complete = false;
+  if (btCentralState != CENTRAL_STATE_SCAN_START && btCentralState != CENTRAL_STATE_SCANNING)
+    btCentralState = CENTRAL_STATE_SCAN_START;
+  ESP_LOGI(LOG_UART, "Web: scan started");
+}
+
+// Web-triggered connect to a specific MAC address (12 hex chars, no separators)
+void webConnect(const char *mac)
+{
+  if (curMode != ROLE_BLE_CENTRAL) return;
+  strncpy(rmtaddress, mac, sizeof(rmtaddress) - 1);
+  rmtaddress[sizeof(rmtaddress) - 1] = '\0';
+  btCentralState = CENTRAL_STATE_CONNECT;
+  ESP_LOGI(LOG_UART, "Web: connecting to %s", rmtaddress);
+}
+
+void webDisconnect(void)
+{
+  if (curMode == ROLE_BLE_CENTRAL) {
+    btc_disconnect();
+    btCentralState = CENTRAL_STATE_IDLE;
+    ESP_LOGI(LOG_UART, "Web: central disconnected, state -> IDLE");
+  } else {
+    btp_disconnect();
+    ESP_LOGI(LOG_UART, "Web: peripheral disconnected");
+  }
+}
+
 void runUARTHead()
 {
   // Setup UART Port

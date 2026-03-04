@@ -85,3 +85,6 @@ void runUARTHead();
 void logBTFrame(const char btdata[], int len);
 role_t getCurRole(void);
 void setRole(role_t role);
+void webStartScan(void);
+void webConnect(const char *mac);
+void webDisconnect(void);

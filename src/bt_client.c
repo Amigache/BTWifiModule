@@ -450,10 +450,29 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
               }
             }
             if (!found) {
-              btc_scanned_addresses[bt_scanned_address_cnt].type = scan_result->scan_rst.ble_addr_type;
-              memcpy(btc_scanned_addresses[bt_scanned_address_cnt++].addr, scan_result->scan_rst.bda,
-
-                     sizeof(esp_bd_addr_t));
+              esp_bt_addr_t_rp *entry = &btc_scanned_addresses[bt_scanned_address_cnt];
+              entry->type = scan_result->scan_rst.ble_addr_type;
+              memcpy(entry->addr, scan_result->scan_rst.bda, sizeof(esp_bd_addr_t));
+              entry->rssi = scan_result->scan_rst.rssi;
+              /* Extract device name from advertisement data */
+              entry->name[0] = '\0';
+              uint8_t *adv = scan_result->scan_rst.ble_adv;
+              uint8_t adv_len = scan_result->scan_rst.adv_data_len + scan_result->scan_rst.scan_rsp_len;
+              uint8_t pos = 0;
+              while (pos < adv_len && adv[pos] != 0) {
+                  uint8_t len = adv[pos];
+                  if (pos + len >= adv_len) break;
+                  uint8_t type = adv[pos + 1];
+                  if (type == 0x09 || type == 0x08) { /* Complete or Short Local Name */
+                      uint8_t nlen = len - 1;
+                      if (nlen > 31) nlen = 31;
+                      memcpy(entry->name, &adv[pos + 2], nlen);
+                      entry->name[nlen] = '\0';
+                      break;
+                  }
+                  pos += len + 1;
+              }
+              bt_scanned_address_cnt++;
             }
           }
           char addr[13];
@@ -583,6 +602,7 @@ void btc_connect(esp_bd_addr_t addr)
         esp_ble_gattc_open(gl_profile_tab[PROFILE_A_APP_ID].gattc_if, addr, BLE_ADDR_TYPE_PUBLIC, true);
       else if (btc_scanned_addresses[i].type == BLE_ADDR_TYPE_RANDOM)
         esp_ble_gattc_open(gl_profile_tab[PROFILE_A_APP_ID].gattc_if, addr, BLE_ADDR_TYPE_RANDOM, true);
+      connstarted = true;
       break;
     }
   }

@@ -32,6 +32,9 @@
 #define UART_NUM UART_NUM_1
 #define UART_TXPIN 21
 #define UART_RXPIN 20
+#define BOOT_BTN_PIN 9
+#define LED_PIN      8
+#define LED_ACTIVE_LOW 1
 
 #else
 
