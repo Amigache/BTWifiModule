@@ -55,6 +55,31 @@ int laddcnt = 0;
 char rmtaddress[13] = "000000000000";
 char reusablebuff[REUSABLE_BUFFER];
 
+// ---- Telemetry raw relay buffer ----------------------------------------
+#define TELEM_BUF_SIZE  64
+#define TELEM_FLUSH_US  5000  // flush if no new bytes for 5ms
+static uint8_t telem_buf[TELEM_BUF_SIZE];
+static int     telem_len = 0;
+static int64_t telem_last_byte_us = 0;
+
+static void telemFlush(void)
+{
+  if (telem_len > 0) {
+    if (btp_connected)
+      btp_sendChannelData(telem_buf, telem_len);
+    telem_len = 0;
+  }
+}
+
+static void telemAppendByte(uint8_t byte)
+{
+  telem_buf[telem_len++] = byte;
+  telem_last_byte_us = esp_timer_get_time();
+  if (telem_len >= TELEM_BUF_SIZE)
+    telemFlush();
+}
+// ------------------------------------------------------------------------
+
 void sendBTMode()
 {
   char lcladdress[13] = "000000000000";
@@ -65,6 +90,9 @@ void sendBTMode()
     uart_write_bytes(uart_num, reusablebuff, strlen(reusablebuff));
   } else if (curMode == ROLE_BLE_CENTRAL) {
     snprintf(reusablebuff, sizeof(reusablebuff), "Central:%s\r\n", lcladdress);
+    uart_write_bytes(uart_num, reusablebuff, strlen(reusablebuff));
+  } else if (curMode == ROLE_BLE_TELEMETRY) {
+    snprintf(reusablebuff, sizeof(reusablebuff), "Telemetry:%s\r\n", lcladdress);
     uart_write_bytes(uart_num, reusablebuff, strlen(reusablebuff));
   }
 }
@@ -91,6 +119,12 @@ void parserATCommand(char atcommand[])
     ESP_LOGI(LOG_UART, "Setting role as Central");
     UART_WRITE_STRING(uart_num, "OK+Role:1\r\n");
     setRole(ROLE_BLE_CENTRAL);
+    sendBTMode();
+
+  } else if (strncmp(atcommand, "+ROLE2", 6) == 0) {
+    ESP_LOGI(LOG_UART, "Setting role as Telemetry");
+    UART_WRITE_STRING(uart_num, "OK+Role:2\r\n");
+    setRole(ROLE_BLE_TELEMETRY);
     sendBTMode();
 
   } else if (strncmp(atcommand, "+CON", 4) == 0) {
@@ -238,6 +272,8 @@ void runUARTHead()
         static char lc = 0;
         if (lc == 'A' && c == 'T') {
           atcommandlen = 0;
+        } else if (curMode == ROLE_BLE_TELEMETRY) {
+          telemAppendByte(c);
         } else {
           frSkyProcessByte(c);
         }
@@ -253,6 +289,8 @@ void runUARTHead()
   vTaskDelete(NULL);
 }
 
+role_t getCurRole(void) { return curMode; }
+
 void setRole(role_t role)
 {
   ESP_LOGI(LOG_UART, "Switching from mode %d to %d", curMode, role);
@@ -262,6 +300,7 @@ void setRole(role_t role)
   switch (curMode) {
     case ROLE_BLE_CENTRAL:
     case ROLE_BLE_PERIPHERAL:
+    case ROLE_BLE_TELEMETRY:
       bt_disable();
     default:
       break;
@@ -279,7 +318,9 @@ void setRole(role_t role)
       btcInit();
       break;
     case ROLE_BLE_PERIPHERAL:
+    case ROLE_BLE_TELEMETRY:
       btPeripherialState = PERIPHERIAL_STATE_DISCONNECTED;
+      telem_len = 0;
       bt_init();
       btpInit();
       break;
@@ -402,6 +443,13 @@ void runBT()
       break;
     case ROLE_BLE_PERIPHERAL:
       runBTPeripherial();
+      break;
+    case ROLE_BLE_TELEMETRY:
+      runBTPeripherial();
+      // Flush pending telemetry bytes after timeout
+      if (telem_len > 0 &&
+          (esp_timer_get_time() - telem_last_byte_us) > TELEM_FLUSH_US)
+        telemFlush();
       break;
     /*case ROLE_BTEDR_AUDIO_SOURCE:
       break;

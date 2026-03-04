@@ -63,13 +63,7 @@ static uint8_t adv_config_done = 0;
 #define adv_config_flag (1 << 0)
 #define scan_rsp_config_flag (1 << 1)
 
-// FORMAT  <Bytes> <Flag> <Data>
-static uint8_t raw_adv_data[] = {
-    0x02, 0x01, 0x06,                       // General | NoBREDR
-    0x03, 0x02, 0xF0, 0xFF,                 // Available Service
-    0x06, 0x09, 'H',  'e',  'l', 'l', 'o',  // Name
-    0x02, 0x0A, 0x00                        // TX Power
-};
+// Advertisement data is built dynamically from btname[] in esp_gatts_cb
 
 // No Scan Response
 /*
@@ -241,11 +235,24 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
       gl_profile_tab[PROFILE_TRAINER_SL_ID].service_id.id.uuid.uuid.uuid16 =
           GATTS_SERVICE_FRSKY_UUID;
 
-      /*esp_err_t set_dev_name_ret = esp_ble_gap_set_device_name(devicename);
-      if (set_dev_name_ret){
+      // Set device name in GAP
+      esp_err_t set_dev_name_ret = esp_ble_gap_set_device_name(btname);
+      if (set_dev_name_ret) {
           ESP_LOGE(GATTS_TAG, "set device name failed, error code = %x", set_dev_name_ret);
-      }*/
-      esp_err_t raw_adv_ret = esp_ble_gap_config_adv_data_raw(raw_adv_data, sizeof(raw_adv_data));
+      }
+
+      // Build raw adv payload dynamically from current btname[]
+      uint8_t name_len = (uint8_t)strnlen(btname, 29);
+      uint8_t adv_buf[31];
+      uint8_t adv_pos = 0;
+      adv_buf[adv_pos++] = 0x02; adv_buf[adv_pos++] = 0x01; adv_buf[adv_pos++] = 0x06; // Flags
+      adv_buf[adv_pos++] = 0x03; adv_buf[adv_pos++] = 0x02;                             // UUID16 list
+      adv_buf[adv_pos++] = 0xF0; adv_buf[adv_pos++] = 0xFF;
+      adv_buf[adv_pos++] = name_len + 1; adv_buf[adv_pos++] = 0x09;                     // Complete Name
+      memcpy(&adv_buf[adv_pos], btname, name_len); adv_pos += name_len;
+      adv_buf[adv_pos++] = 0x02; adv_buf[adv_pos++] = 0x0A; adv_buf[adv_pos++] = 0x00; // TX Power
+
+      esp_err_t raw_adv_ret = esp_ble_gap_config_adv_data_raw(adv_buf, adv_pos);
       if (raw_adv_ret) {
         ESP_LOGE(GATTS_TAG, "config raw adv data failed, error code = %x ", raw_adv_ret);
       }

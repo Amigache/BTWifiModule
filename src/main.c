@@ -29,6 +29,7 @@
 #include "nvs_flash.h"
 #include "settings.h"
 #include "terminal.h"
+#include "webserver.h"
 
 nvs_handle_t nvs_flsh_btw;
 
@@ -70,4 +71,6 @@ void app_main(void)
   ESP_ERROR_CHECK(nvs_open("btwifi", NVS_READWRITE, &nvs_flsh_btw));
 
   loadSettings();
+
+  webserver_start();
 }

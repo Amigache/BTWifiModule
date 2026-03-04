@@ -57,6 +57,7 @@ typedef enum {
   ROLE_UNKNOWN=0,
   ROLE_BLE_PERIPHERAL,
   ROLE_BLE_CENTRAL,
+  ROLE_BLE_TELEMETRY,  // BLE Peripheral + raw UART relay for FrSky telemetry
   ROLE_ADVANCE,
   ROLE_COUNT
 } role_t;
