@@ -19,7 +19,7 @@
 esp_bd_addr_t localbtaddress;
 esp_bd_addr_t rmtbtaddress;
 
-char btname[MAX_BTNAME_LEN] = "Hello";
+char btname[MAX_BTNAME_LEN] = "BTModule";
 
 void strtobtaddr(esp_bd_addr_t dest, char *src)
 {

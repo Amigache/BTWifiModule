@@ -14,6 +14,7 @@
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_heap_caps.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
 #include "esp_system.h"
@@ -374,7 +375,7 @@ static void build_info_json(char *buf, size_t len)
              (cur != ROLE_UNKNOWN) ? "true" : "false",
              (int)cur,
              (unsigned long)esp_get_free_heap_size(),
-             (unsigned long)esp_get_minimum_free_heap_size() + esp_get_free_heap_size(),
+             (unsigned long)heap_caps_get_total_size(MALLOC_CAP_DEFAULT),
              fw_ver, fw_short, rmt_mac);
 }
 
@@ -573,9 +574,9 @@ static void scan_monitor_task(void *arg)
         /* Push info: immediately on connect, then every 2s */
         TickType_t now = xTaskGetTickCount();
         if (ws_send_info_now || (now - last_info) >= pdMS_TO_TICKS(2000)) {
-            char *info = malloc(680);
+            char *info = malloc(1024);
             if (info) {
-                build_info_json(info, 680);
+                build_info_json(info, 1024);
                 ws_push(info);
                 free(info);
             }
