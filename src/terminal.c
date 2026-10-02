@@ -33,6 +33,7 @@ const uart_port_t uart_num = UART_NUM;
 typedef enum {
   CENTRAL_STATE_DISCONNECT,
   CENTRAL_STATE_IDLE,
+  CENTRAL_STATE_AUTOCONNECT,
   CENTRAL_STATE_SCAN_START,
   CENTRAL_STATE_SCANNING,
   CENTRAL_STATE_SCAN_COMPLETE,
@@ -297,6 +298,18 @@ void runBTCentral()
     case CENTRAL_STATE_DISCONNECT: {
       // Stop scanning, disconnect from all periferials
       btc_disconnect();
+      // Reconnect to the last known device when available
+      if (!btc_connected && btc_has_saved_address()) {
+        btCentralState = CENTRAL_STATE_AUTOCONNECT;
+      }
+      break;
+    }
+    case CENTRAL_STATE_AUTOCONNECT: {
+      if (btc_connected) {
+        btCentralState = CENTRAL_STATE_CONNECTED;
+      } else if (btc_start_autoconnect()) {
+        btCentralState = CENTRAL_STATE_WAITING_CONNECTION;
+      }
       break;
     }
     case CENTRAL_STATE_SCAN_START: {
@@ -326,12 +339,10 @@ void runBTCentral()
       break;
     }
     case CENTRAL_STATE_IDLE: {
-      // TODO Automatically try to connect to the last known bluetooth address
-      // esp_bd_addr_t btaddr;
-      // if(!readBTAddress(btaddr)) {
-      //  btCentralState = CENTRAL_STATE_CONNECT;
-      //}
-      // Do Nothing
+      // Try to reconnect to the last known bluetooth address
+      if (!btc_connected && btc_has_saved_address()) {
+        btCentralState = CENTRAL_STATE_AUTOCONNECT;
+      }
       break;
     }
 
@@ -346,6 +357,9 @@ void runBTCentral()
     case CENTRAL_STATE_WAITING_CONNECTION: {
       if (btc_scan_complete) {
         if (btc_validslavefound) {
+          // btc_connect() stores the actual remote address, which is also the
+          // right value when we got here through auto-connect.
+          btaddrtostr(rmtaddress, rmtbtaddress);
           sprintf(reusablebuff, "Connected:%s\r\n", rmtaddress);
           uart_write_bytes(uart_num, reusablebuff, strlen(reusablebuff));
           sprintf(
@@ -367,8 +381,13 @@ void runBTCentral()
 
     case CENTRAL_STATE_CONNECTED: {
       if (!btc_connected) {  // Connection Lost
-        btCentralState = CENTRAL_STATE_CONNECT;
+        if (btc_has_saved_address()) {
+          btCentralState = CENTRAL_STATE_AUTOCONNECT;
+        } else {
+          btCentralState = CENTRAL_STATE_CONNECT;
+        }
       }
+      break;
     }
   }
 }
