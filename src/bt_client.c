@@ -45,14 +45,24 @@
 #define REMOTE_SERVICE_UUID 0xFFF0
 #define REMOTE_FRSKY_CHAR_UUID 0xFFF6
 #define REMOTE_HTRESET_CHAR_UUID 0xAFF2
+#define REMOTE_HTCHAN_CHAR_UUID 0xAFF1
 #define PROFILE_NUM 1
 #define PROFILE_A_APP_ID 0
 #define INVALID_HANDLE 0
 
 #if defined(USE_NIMBLE)
 
-// --- NimBLE central (client) not implemented yet (step 3). These stubs let the
-//     firmware link so the peripheral/telemetry path can be tested first. ---
+#include "nimble/nimble_port.h"
+#include "nimble/nimble_port_freertos.h"
+#include "host/ble_hs.h"
+#include "host/ble_hs_mbuf.h"
+#include "host/util/util.h"
+#include "host/ble_gap.h"
+#include "host/ble_gatt.h"
+#include "os/os_mbuf.h"
+
+#define GATTC_TAG "BTCLIENT"
+
 char *str_ble_board_types[BLE_BOARD_COUNT] = {"Unknown", "CC2540", "PARA", "HeadTracker",
                                               "FlySky"};
 uint8_t bt_scanned_address_cnt = 0;
@@ -62,15 +72,314 @@ volatile bool btc_scan_complete = true;
 volatile bool btc_validslavefound = false;
 volatile bool btc_ht_reset = false;
 volatile ble_board_type btc_board_type = BLE_BOARD_UNKNOWN;
+static volatile bool btc_autoconnect = false;
+static volatile bool btc_readytoscan = false;
 
-void btcInit() {}
-void btc_disconnect() {}
-void btc_start_scan() {}
-void btc_scan_stop() {}
-bool btc_has_saved_address() { return false; }
-bool btc_start_autoconnect() { return false; }
-void btc_dohtreset() {}
-void btc_connect(esp_bd_addr_t addr) { (void)addr; }
+static uint8_t btc_own_addr_type = BLE_OWN_ADDR_PUBLIC;
+static uint16_t btc_conn_handle = 0xFFFF;
+static uint16_t btc_svc_start = 0, btc_svc_end = 0;
+static uint16_t btc_data_handle = 0;      // 0xFFF6 trainer characteristic
+static uint16_t btc_htreset_handle = 0;   // 0xAFF2 headtracker reset
+static uint16_t btc_cccd_handle = 0;
+static bool btc_found_svc = false;
+
+static int btc_gap_event(struct ble_gap_event *event, void *arg);
+static int btc_on_disc_svc(uint16_t conn_handle, const struct ble_gatt_error *error,
+                           const struct ble_gatt_svc *service, void *arg);
+static int btc_on_disc_chr(uint16_t conn_handle, const struct ble_gatt_error *error,
+                           const struct ble_gatt_chr *chr, void *arg);
+static int btc_on_disc_dsc(uint16_t conn_handle, const struct ble_gatt_error *error,
+                           uint16_t chr_val_handle, const struct ble_gatt_dsc *dsc, void *arg);
+
+static int btc_on_disc_dsc(uint16_t conn_handle, const struct ble_gatt_error *error,
+                           uint16_t chr_val_handle, const struct ble_gatt_dsc *dsc, void *arg)
+{
+  if (error->status == 0 && dsc != NULL) {
+    if (dsc->uuid.u.type == BLE_UUID_TYPE_16 &&
+        dsc->uuid.u16.value == BLE_GATT_DSC_CLT_CFG_UUID16) {
+      btc_cccd_handle = dsc->handle;
+    }
+  } else if (error->status == BLE_HS_EDONE) {
+    if (btc_cccd_handle) {
+      uint8_t val[2] = {0x01, 0x00};
+      ble_gattc_write_flat(conn_handle, btc_cccd_handle, val, sizeof(val), NULL, NULL);
+    }
+    btc_scan_complete = true;
+  }
+  return 0;
+}
+
+static int btc_on_disc_chr(uint16_t conn_handle, const struct ble_gatt_error *error,
+                           const struct ble_gatt_chr *chr, void *arg)
+{
+  if (error->status == 0 && chr != NULL) {
+    if (chr->uuid.u.type == BLE_UUID_TYPE_16) {
+      uint16_t u = chr->uuid.u16.value;
+      if (u == REMOTE_FRSKY_CHAR_UUID) {
+        btc_validslavefound = true;
+        btc_data_handle = chr->val_handle;
+        ESP_LOGI(GATTC_TAG, "Found the Trainer Characteristic");
+      } else if (u == REMOTE_HTRESET_CHAR_UUID) {
+        btc_board_type = BLE_BOARD_HEADTRACKER;
+        btc_htreset_handle = chr->val_handle;
+      } else if (u == REMOTE_HTCHAN_CHAR_UUID) {
+        btc_board_type = BLE_BOARD_HEADTRACKER;
+      }
+    }
+  } else if (error->status == BLE_HS_EDONE) {
+    if (btc_validslavefound) {
+      // Save the remote address for auto-connect
+      struct ble_gap_conn_desc desc;
+      if (ble_gap_conn_find(conn_handle, &desc) == 0) {
+        memcpy(rmtbtaddress, desc.peer_ota_addr.val, sizeof(esp_bd_addr_t));
+        btaddrtostr(settings.rmtbtaddr, rmtbtaddress);
+        saveSettings();
+      }
+      // Subscribe to notifications on the trainer characteristic
+      ble_gattc_disc_all_dscs(conn_handle, btc_data_handle, btc_svc_end, btc_on_disc_dsc, NULL);
+    } else {
+      ble_gap_terminate(conn_handle, 0x13 /* remote user terminated */);
+    }
+  }
+  return 0;
+}
+
+static int btc_on_disc_svc(uint16_t conn_handle, const struct ble_gatt_error *error,
+                           const struct ble_gatt_svc *service, void *arg)
+{
+  if (error->status == 0 && service != NULL) {
+    if (service->uuid.u.type == BLE_UUID_TYPE_16 &&
+        service->uuid.u16.value == REMOTE_SERVICE_UUID) {
+      btc_svc_start = service->start_handle;
+      btc_svc_end = service->end_handle;
+      btc_found_svc = true;
+      ESP_LOGI(GATTC_TAG, "service found 0x%04X", REMOTE_SERVICE_UUID);
+    }
+  } else if (error->status == BLE_HS_EDONE) {
+    if (btc_found_svc) {
+      ble_gattc_disc_all_chrs(conn_handle, btc_svc_start, btc_svc_end, btc_on_disc_chr, NULL);
+    } else {
+      ble_gap_terminate(conn_handle, 0x13 /* remote user terminated */);
+    }
+  }
+  return 0;
+}
+
+static int btc_gap_event(struct ble_gap_event *event, void *arg)
+{
+  switch (event->type) {
+    case BLE_GAP_EVENT_DISC: {
+      if (bt_scanned_address_cnt < MAX_BLE_ADDRESSES && event->disc.rssi > MIN_BLE_RSSI) {
+        bool found = false;
+        for (int i = 0; i < bt_scanned_address_cnt; i++) {
+          if (memcmp(btc_scanned_addresses[i].addr, event->disc.addr.val,
+                     sizeof(esp_bd_addr_t)) == 0) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          btc_scanned_addresses[bt_scanned_address_cnt].type = event->disc.addr.type;
+          memcpy(btc_scanned_addresses[bt_scanned_address_cnt++].addr, event->disc.addr.val,
+                 sizeof(esp_bd_addr_t));
+        }
+      }
+
+      char addr[13];
+      printf("Disc BT Address %s, RSSI=%d, Addr Type=%d\n", btaddrtostr(addr, event->disc.addr.val),
+             event->disc.rssi, event->disc.addr.type);
+
+      if (btc_autoconnect && !btc_connected) {
+        esp_bd_addr_t saved;
+        strtobtaddr(saved, settings.rmtbtaddr);
+        if (memcmp(saved, event->disc.addr.val, sizeof(esp_bd_addr_t)) == 0) {
+          bool known = false;
+          for (int i = 0; i < bt_scanned_address_cnt; i++) {
+            if (memcmp(btc_scanned_addresses[i].addr, saved, sizeof(esp_bd_addr_t)) == 0) {
+              known = true;
+              break;
+            }
+          }
+          if (known) {
+            printf("Auto-connect: saved device found\r\n");
+            btc_autoconnect = false;
+            ble_gap_disc_cancel();
+            btc_connect(event->disc.addr.val);
+          }
+        }
+      }
+      return 0;
+    }
+
+    case BLE_GAP_EVENT_DISC_COMPLETE:
+      btc_scan_complete = true;
+      return 0;
+
+    case BLE_GAP_EVENT_CONNECT:
+      if (event->connect.status == 0) {
+        btc_connected = true;
+        btc_conn_handle = event->connect.conn_handle;
+        btc_scan_complete = false;
+        btc_validslavefound = false;
+        btc_found_svc = false;
+        btc_board_type = BLE_BOARD_UNKNOWN;
+        ESP_LOGI(GATTC_TAG, "connected handle=%d", btc_conn_handle);
+        ble_gattc_exchange_mtu(btc_conn_handle, NULL, NULL);
+        ble_gattc_disc_all_svcs(btc_conn_handle, btc_on_disc_svc, NULL);
+      } else {
+        btc_connected = false;
+        btc_scan_complete = true;
+      }
+      return 0;
+
+    case BLE_GAP_EVENT_DISCONNECT:
+      btc_connected = false;
+      btc_conn_handle = 0xFFFF;
+      btc_scan_complete = false;
+      ESP_LOGI(GATTC_TAG, "disconnect reason=%d", event->disconnect.reason);
+      return 0;
+
+    case BLE_GAP_EVENT_NOTIFY_RX: {
+      uint8_t buf[256];
+      uint16_t len = 0;
+      if (ble_hs_mbuf_to_flat(event->notify_rx.om, buf, sizeof(buf), &len) == 0 && len > 0) {
+        uart_write_bytes(uart_num, buf, len);
+      }
+      return 0;
+    }
+
+    case BLE_GAP_EVENT_MTU:
+      ESP_LOGI(GATTC_TAG, "mtu=%d", event->mtu.value);
+      return 0;
+
+    default:
+      return 0;
+  }
+}
+
+static void btc_on_sync(void)
+{
+  int rc = ble_hs_util_ensure_addr(0);
+  if (rc != 0) {
+    ESP_LOGE(GATTC_TAG, "ensure_addr rc=%d", rc);
+    return;
+  }
+  rc = ble_hs_id_infer_auto(0, &btc_own_addr_type);
+  if (rc != 0) {
+    ESP_LOGE(GATTC_TAG, "infer_auto rc=%d", rc);
+    return;
+  }
+  ble_hs_id_copy_addr(btc_own_addr_type, localbtaddress, NULL);
+  btc_readytoscan = true;
+}
+
+void btcInit()
+{
+  ESP_LOGI(GATTC_TAG, "Starting Central (NimBLE)");
+  ble_hs_cfg.sync_cb = btc_on_sync;
+  ble_att_set_preferred_mtu(85);
+  nimble_port_freertos_init(bt_host_task);
+}
+
+void btc_start_scan()
+{
+  if (!btc_readytoscan) return;
+
+  struct ble_gap_disc_params params = {0};
+  params.passive = 0;
+  params.filter_duplicates = 1;
+
+  btc_autoconnect = false;
+  btc_scan_complete = false;
+  bt_scanned_address_cnt = 0;
+  printf("Clearing Addresses\r\n");
+  ble_gap_disc(btc_own_addr_type, 1000, &params, btc_gap_event, NULL);
+}
+
+void btc_scan_stop()
+{
+  ble_gap_disc_cancel();
+}
+
+bool btc_has_saved_address()
+{
+  return settings.rmtbtaddr[0] != '\0' && strcmp(settings.rmtbtaddr, "000000000000") != 0;
+}
+
+bool btc_start_autoconnect()
+{
+  if (!btc_readytoscan || btc_connected) return false;
+
+  struct ble_gap_disc_params params = {0};
+  params.passive = 0;
+  params.filter_duplicates = 1;
+
+  btc_autoconnect = true;
+  btc_scan_complete = false;
+  btc_validslavefound = false;
+  bt_scanned_address_cnt = 0;
+  printf("Auto-connect: scanning for saved device\r\n");
+  ble_gap_disc(btc_own_addr_type, BLE_HS_FOREVER, &params, btc_gap_event, NULL);
+  return true;
+}
+
+void btc_connect(esp_bd_addr_t addr)
+{
+  if (btc_connected) return;
+  btc_autoconnect = false;
+  btc_scan_complete = false;
+  btc_validslavefound = false;
+  memcpy(rmtbtaddress, addr, sizeof(esp_bd_addr_t));
+
+  // The peer address type is only known after scanning, so the address must
+  // have been seen in the current scan list.
+  ble_addr_t peer;
+  memcpy(peer.val, addr, sizeof(esp_bd_addr_t));
+  peer.type = BLE_ADDR_PUBLIC;
+  bool connstarted = false;
+  for (int i = 0; i < bt_scanned_address_cnt; i++) {
+    if (memcmp(btc_scanned_addresses[i].addr, addr, sizeof(esp_bd_addr_t)) == 0) {
+      peer.type = btc_scanned_addresses[i].type;
+      connstarted = true;
+      break;
+    }
+  }
+
+  char saddr[13];
+  if (!connstarted) {
+    printf("Unable to connect to %s, address not found in storage\r\n", btaddrtostr(saddr, addr));
+    return;
+  }
+
+  struct ble_gap_conn_params cp = {0};
+  cp.itvl_min = BT_CON_INT_MIN;
+  cp.itvl_max = BT_CON_INT_MAX;
+  cp.latency = 0;
+  cp.supervision_timeout = BT_CON_TIMEOUT;
+
+  printf("Connecting to %s\r\n", btaddrtostr(saddr, addr));
+  int rc = ble_gap_connect(btc_own_addr_type, &peer, 30000, &cp, btc_gap_event, NULL);
+  if (rc != 0) {
+    printf("Unable to connect to %s (rc=%d)\r\n", btaddrtostr(saddr, addr), rc);
+  }
+}
+
+void btc_disconnect()
+{
+  if (btc_connected) {
+    ble_gap_terminate(btc_conn_handle, 0x13 /* remote user terminated */);
+  }
+  btc_connected = false;
+  btc_scan_complete = false;
+  btc_validslavefound = false;
+}
+
+void btc_dohtreset()
+{
+  if (btc_connected && btc_htreset_handle) {
+    ble_gattc_write_flat(btc_conn_handle, btc_htreset_handle, (uint8_t *)"R", 1, NULL, NULL);
+  }
+}
 
 #else  // !USE_NIMBLE (Bluedroid)
 
