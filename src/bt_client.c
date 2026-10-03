@@ -21,12 +21,6 @@
 
 #include "bt.h"
 #include "defines.h"
-#include "esp_bt.h"
-#include "esp_bt_main.h"
-#include "esp_gap_ble_api.h"
-#include "esp_gatt_common_api.h"
-#include "esp_gatt_defs.h"
-#include "esp_gattc_api.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -34,7 +28,16 @@
 #include "settings.h"
 #include "terminal.h"
 
-#if defined(BLUETOOTH5)
+#if !defined(USE_NIMBLE)
+#include "esp_bt.h"
+#include "esp_bt_main.h"
+#include "esp_gap_ble_api.h"
+#include "esp_gatt_common_api.h"
+#include "esp_gatt_defs.h"
+#include "esp_gattc_api.h"
+#endif
+
+#if defined(BLUETOOTH5) && !defined(USE_NIMBLE)
 #include "esp_gap_ble_api.h"
 #endif
 
@@ -45,6 +48,31 @@
 #define PROFILE_NUM 1
 #define PROFILE_A_APP_ID 0
 #define INVALID_HANDLE 0
+
+#if defined(USE_NIMBLE)
+
+// --- NimBLE central (client) not implemented yet (step 3). These stubs let the
+//     firmware link so the peripheral/telemetry path can be tested first. ---
+char *str_ble_board_types[BLE_BOARD_COUNT] = {"Unknown", "CC2540", "PARA", "HeadTracker",
+                                              "FlySky"};
+uint8_t bt_scanned_address_cnt = 0;
+esp_bt_addr_t_rp btc_scanned_addresses[MAX_BLE_ADDRESSES];
+volatile bool btc_connected = false;
+volatile bool btc_scan_complete = true;
+volatile bool btc_validslavefound = false;
+volatile bool btc_ht_reset = false;
+volatile ble_board_type btc_board_type = BLE_BOARD_UNKNOWN;
+
+void btcInit() {}
+void btc_disconnect() {}
+void btc_start_scan() {}
+void btc_scan_stop() {}
+bool btc_has_saved_address() { return false; }
+bool btc_start_autoconnect() { return false; }
+void btc_dohtreset() {}
+void btc_connect(esp_bd_addr_t addr) { (void)addr; }
+
+#else  // !USE_NIMBLE (Bluedroid)
 
 char *str_ble_board_types[BLE_BOARD_COUNT] = {"Unknown", "CC2540", "PARA", "HeadTracker", "FlySky"};
 
@@ -124,10 +152,13 @@ static struct gattc_profile_inst gl_profile_tab[PROFILE_NUM] = {
 #include <string.h>
 
 #include "bt.h"
-#include "esp_bt.h"
-#include "esp_bt_main.h"
 #include "esp_err.h"
 #include "esp_log.h"
+
+#if !defined(USE_NIMBLE)
+#include "esp_bt.h"
+#include "esp_bt_main.h"
+#endif
 
 void gattc_update_connection_params(esp_bd_addr_t *remote_bda)
 {
@@ -685,3 +716,5 @@ void btcInit()
   // Auto-connect to the last known device is handled by the central state
   // machine (CENTRAL_STATE_AUTOCONNECT) once scanning is ready.
 }
+
+#endif  // USE_NIMBLE
