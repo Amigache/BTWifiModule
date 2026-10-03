@@ -234,15 +234,19 @@ void runUARTHead()
           atcommandlen = -1;
         }
       } else {
-        // Scan for characters AT in the byte stream
-        static char lc = 0;
-        if (lc == 'A' && c == 'T') {
+        // Scan for the "AT+" prefix in the byte stream. Requiring the '+'
+        // (EdgeTX always sends "AT+...") avoids false triggers from 'A','T'
+        // sequences inside binary telemetry/trainer frames.
+        static char lc1 = 0;
+        static char lc2 = 0;
+        if (lc2 == 'A' && lc1 == 'T' && c == '+') {
           atcommandlen = 0;
+          atcommand[atcommandlen++] = '+';
         } else {
           frSkyProcessByte(c);
         }
-
-        lc = c;
+        lc2 = lc1;
+        lc1 = c;
       }
     }
 
@@ -373,15 +377,23 @@ void runBTCentral()
   }
 }
 
+/* Sends the "Connected" announcement for peripheral mode. Used when a central
+ * connects, and periodically afterwards in case the radio missed the first. */
+void sendPeripheralConnected()
+{
+  if (curMode != ROLE_BLE_PERIPHERAL) return;
+
+  btaddrtostr(rmtaddress, rmtbtaddress);
+  snprintf(reusablebuff, sizeof(reusablebuff), "Connected:%s\r\n", rmtaddress);
+  uart_write_bytes(uart_num, reusablebuff, strlen(reusablebuff));
+}
+
 void runBTPeripherial()
 {
   switch (btPeripherialState) {
     case PERIPHERIAL_STATE_DISCONNECTED:
       if (btp_connected) {
-        // Save Remote Address
-        btaddrtostr(rmtaddress, rmtbtaddress);
-        sprintf(reusablebuff, "Connected:%s\r\n", rmtaddress);
-        uart_write_bytes(uart_num, reusablebuff, strlen(reusablebuff));
+        sendPeripheralConnected();
         btPeripherialState = PERIPHERIAL_STATE_CONNECTED;
       }
       break;
@@ -389,6 +401,14 @@ void runBTPeripherial()
       if (!btp_connected) {
         btPeripherialState = PERIPHERIAL_STATE_DISCONNECTED;
         uart_write_bytes(uart_num, "DisConnected\r\nERROR\r\nERROR\r\n", 28);
+      } else {
+        // Re-announce periodically in case the radio missed the first one.
+        static int64_t lastAnnounce = 0;
+        int64_t now = esp_timer_get_time();
+        if (now - lastAnnounce > 2000000) {  // every 2s
+          lastAnnounce = now;
+          sendPeripheralConnected();
+        }
       }
       break;
   }
