@@ -413,6 +413,10 @@ void bt_client_start_scan(void)
   bt_client_scan_complete = false;
   scanned_clear();
   printf("Clearing Addresses\r\n");
+  // Cancel any in-progress discovery first (e.g. the endless auto-connect
+  // scan): otherwise ble_gap_disc fails with EALREADY, the timed scan never
+  // runs and the state machine never reports "OK+DISCE".
+  ble_gap_disc_cancel();
   ble_gap_disc(s_own_addr_type, 1000, &params, bt_gap_event, NULL);
 }
 
@@ -856,6 +860,10 @@ void bt_client_start_scan(void)
   bt_client_scan_complete = false;
   scanned_clear();
   printf("Clearing Addresses\r\n");
+  // Stop any in-progress scan first (e.g. the endless auto-connect scan);
+  // otherwise the new timed scan is rejected and the state machine never
+  // reports "OK+DISCE".
+  esp_ble_gap_stop_scanning();
   uint32_t duration = 1;
   esp_ble_gap_start_scanning(duration);
 }

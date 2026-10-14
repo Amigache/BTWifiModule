@@ -29,7 +29,7 @@
 #define MAX_BLE_ADDRESSES 20
 
 /** Minimum RSSI (dBm) to consider a device during the scan. */
-#define MIN_BLE_RSSI -85
+#define MIN_BLE_RSSI -95
 
 /** Board/trainer type detected from its GATT characteristics. */
 typedef enum {
