@@ -8,7 +8,7 @@
  * argument, leaving the *response* and the *action* to the upper layer
  * (terminal.c).
  *
- * See `doc/AUDIT.md` for the full protocol contract.
+ * See AGENTS.md ("EdgeTX protocol contract") for the protocol invariants.
  */
 
 #pragma once

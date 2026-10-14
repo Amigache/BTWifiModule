@@ -8,7 +8,7 @@
  *  - In peripheral mode: forward telemetry/trainer traffic to BLE.
  *  - In central mode: forward BLE notifications to the UART.
  *  - Run the state machines that announce connections/disconnections to EdgeTX
- *    with the expected format (see doc/AUDIT.md).
+ *    with the expected format (see AGENTS.md).
  */
 
 #include "terminal.h"
