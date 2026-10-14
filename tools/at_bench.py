@@ -60,6 +60,15 @@ class Bench:
             print(f"        expected any of: {expected}")
             print(f"        got: {response!r}")
 
+    def check_oneof(self, name, response, options):
+        ok = any(o in response for o in options)
+        self.results.append((name, ok, response, options))
+        status = 'PASS' if ok else 'FAIL'
+        print(f"[{status}] {name}")
+        if not ok:
+            print(f"        expected any of: {options}")
+            print(f"        got: {response!r}")
+
     def check_empty(self, name, response):
         ok = response.strip() == ''
         self.results.append((name, ok, response, 'no response'))
@@ -89,7 +98,9 @@ def run(port, baud, name):
     b.check('AT+CON in peripheral -> ERROR', b.send(b'AT+CONaabbccddeeff'), ['ERROR'])
     b.check_empty('AT+DISC? in peripheral -> no response', b.send(b'AT+DISC?', idle=0.8, cap=2.0))
     b.check_empty('AT+CLEAR in peripheral -> no response', b.send(b'AT+CLEAR', idle=0.8, cap=2.0))
-    b.check('AT+HTRESET in peripheral -> ERROR', b.send(b'AT+HTRESET'), ['ERROR'])
+    # OK+HTRESET if a headtracker is associated, ERROR otherwise.
+    b.check_oneof('AT+HTRESET in peripheral', b.send(b'AT+HTRESET'),
+                  ['OK+HTRESET', 'ERROR'])
 
     # --- Common commands (mode line follows) -------------------------------
     cmd = f'AT+NAME{name}'.encode()
@@ -102,7 +113,9 @@ def run(port, baud, name):
     # --- Central (master) mode ---------------------------------------------
     b.check('AT+ROLE1', b.send(b'AT+ROLE1'), ['OK+Role:1', 'Central:'])
     b.check('AT+CLEAR in central', b.send(b'AT+CLEAR'), ['OK+CLEAR'])
-    b.check('AT+HTRESET in central -> ERROR', b.send(b'AT+HTRESET'), ['ERROR'])
+    # OK+HTRESET if a headtracker is associated, ERROR otherwise.
+    b.check_oneof('AT+HTRESET in central', b.send(b'AT+HTRESET'),
+                  ['OK+HTRESET', 'ERROR'])
     b.check('AT+DISC? in central', b.send(b'AT+DISC?', idle=1.0, cap=12.0), ['OK+DISCS', 'OK+DISCE'])
     b.check('AT+CON in central', b.send(b'AT+CONaabbccddeeff'),
             ['OK+CONNA', 'Connecting to:aabbccddeeff'])
