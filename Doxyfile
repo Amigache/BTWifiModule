@@ -1,0 +1,24 @@
+# Doxyfile (minimal Doxygen configuration) for BTWifiModule.
+# Generate the documentation with:  doxygen Doxyfile
+#
+# Documentation comments use the Doxygen format (/** ... */) in the headers
+# under src/.
+
+PROJECT_NAME           = "BTWifiModule"
+PROJECT_BRIEF          = "FrSky Bluetooth emulator for ESP32 (EdgeTX/OpenTX)"
+OUTPUT_DIRECTORY       = doc/html
+
+OPTIMIZE_OUTPUT_FOR_C  = YES
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+EXTRACT_PRIVATE        = NO
+
+INPUT                  = src
+RECURSIVE              = YES
+FILE_PATTERNS          = *.c *.h
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_TREEVIEW      = YES
+
+HAVE_DOT               = NO

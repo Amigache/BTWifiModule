@@ -75,3 +75,6 @@ Release/
 .pio
 .vscode/*
 *.old
+
+# Internal notes (not for the public repository)
+doc/AUDIT.md

@@ -1,9 +1,8 @@
 # BTWifiModule
 
 FrSky Bluetooth emulator for ESP32, to be used inside an OpenTX/EdgeTX radio.
-It emulates a FrSky Bluetooth module and adds **Bluetooth telemetry**
-(S.Port and CRSF), **auto-connect** and a **selectable BLE host**
-(Bluedroid or NimBLE).
+It emulates a FrSky Bluetooth module and adds **Bluetooth telemetry** (S.Port and
+CRSF), **auto-connect** and a **selectable BLE host** (Bluedroid or NimBLE).
 
 Based on the community project by **dlktdr**
 (https://github.com/dlktdr/BTWifiModule).
@@ -33,24 +32,47 @@ link. The module passes those bytes to the connected BLE central unchanged:
 The client app auto-detects the protocol, so both work over the same GATT
 service (`0xFFF0`, characteristic `0xFFF6`, NOTIFY).
 
-## Telemetry app
-
 - S.Port: **INAV / Telemetry Viewer**.
 - CRSF: the maintained fork by **RomanLut**
-  (https://github.com/RomanLut/android-taranis-smartport-telemetry/releases),
-  which publishes ready-made APKs with CRSF support.
+  (https://github.com/RomanLut/android-taranis-smartport-telemetry/releases).
 
 ## Hardware
 
-- **ESP32-C3 SuperMini** (primary target); other boards are listed in
+- **ESP32-C3 SuperMini** (primary target); the other boards are listed in
   `platformio.ini`.
 - UART to the radio: **GPIO20 (RX) / GPIO21 (TX)** on the C3 SuperMini.
-- **Radiomaster TX16S MK3** with **EdgeTX** (a recent nightly is recommended,
-  see below).
+- **Radiomaster TX16S MK3** with **EdgeTX** (a recent nightly is recommended).
 
-> **TX16S MK3 note.** EdgeTX needs PR #7855
-> (`BT_PWR_GPIO = PC13` in `targets/tx16smk3/hal.h`) to power the AUX2/BT
-> connector. It is included in current nightlies.
+> **TX16S MK3 note.** EdgeTX needs PR #7855 (`BT_PWR_GPIO = PC13` in
+> `targets/tx16smk3/hal.h`) to power the AUX2/BT connector. It is included in
+> current nightlies.
+
+## EdgeTX protocol
+
+The module speaks the FrSky Bluetooth AT protocol over an 8N1 UART link at
+115200 baud. All responses are `\r\n`-terminated; the real ACK that advances
+EdgeTX is the `Central:<addr>` / `Peripheral:<addr>` line emitted after
+`AT+TXPW` / `AT+ROLE`. Trainer and S.Port frames are `0x7E`-delimited and
+byte-stuffed, while CRSF/Ghost are forwarded raw. See `AGENTS.md` for the full
+set of protocol invariants.
+
+## Code structure
+
+```
+src/
+  main.c          Entry point (NVS + UART task).
+  board.h         Board config: UART/pins and shared types.
+  at_command.c/h  Pure AT command parser (host-testable).
+  bt_addr.c/h     Bluetooth address conversion (host-testable).
+  cb.c/h          Byte circular buffer (host-testable).
+  settings.c/h    Persistent config (NVS) with protected access.
+  bt.c/h          Common BT stack control (Bluedroid/NimBLE).
+  bt_server.c/h   GATT peripheral (service 0xFFF0).
+  bt_client.c/h   GATT central (scan, connect, auto-connect).
+  terminal.c/h    UART link: AT commands and state machines.
+test/             Unit tests (Unity).
+doc/AUDIT.md      EdgeTX integration audit.
+```
 
 ## Building
 
@@ -69,6 +91,14 @@ pio run -e C3SuperMini_nimble -t upload   # NimBLE
 The Bluedroid path is kept behind `#if !defined(USE_NIMBLE)`, so both hosts
 share the same application code.
 
+## Tests
+
+The pure modules (`cb`, `at_command`, `bt_addr`) have unit tests under `test/`:
+
+```bash
+pio test -e native
+```
+
 ## AT command set
 
 The module speaks the same AT protocol EdgeTX uses for the FrSky Bluetooth
@@ -76,7 +106,7 @@ module:
 
 | Command | Meaning |
 |---|---|
-| `AT+BAUD4` | baud rate (this firmware stays at 115200) |
+| `AT+BAUD4` | baud rate level (this firmware stays at 115200) |
 | `AT+NAME<name>` | set the Bluetooth name (persisted and advertised) |
 | `AT+TXPW<n>` | TX power (acknowledged) |
 | `AT+ROLE0` | Peripheral (telemetry / trainer slave) |
@@ -91,7 +121,8 @@ Responses: `OK+...`, `Central:<addr>`, `Peripheral:<addr>`, `Connected:<addr>`,
 
 ## Branches
 
-- `1.0-dev` — consolidated development branch (this one).
+- `2.0-dev` — consolidated development branch (refactor + audit).
+- `1.0-dev` — previous development branch.
 
 ## Credits
 
