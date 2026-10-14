@@ -133,6 +133,27 @@ Both BLE hosts validated with two modules (A under test, B as peripheral peer):
 | Master: connection (`AT+CON`)           | PASS      | PASS   |
 | Master: data path (peer -> local UART)  | PASS      | PASS   |
 | Headtracker: detect + channels + reset  | PASS      | PASS   |
+| Cross-host interop (Bluedroid <-> NimBLE) | PASS    | PASS   |
+
+## Automated battery
+
+`python tools/battery.py --a <portA> --b <portB> [--ht <addr>]` drives two
+boards at once and runs:
+
+- the AT command bench on each board;
+- telemetry passthrough board-to-board in both directions (this also exercises
+  Bluedroid/NimBLE interop);
+- headtracker detection, channels and reset.
+
+Last run (A = NimBLE, B = Bluedroid, headtracker at -84 dBm):
+
+| Check | Result |
+|---|---|
+| AT bench A (NimBLE) | 16/16 |
+| AT bench B (Bluedroid) | 16/16 |
+| Telemetry A(peripheral) -> B(central) | PASS (336 frames) |
+| Telemetry B(peripheral) -> A(central) | PASS (334 frames) |
+| Headtracker (NimBLE central) | PASS (549 frames) |
 
 ## Known issues and caveats
 
