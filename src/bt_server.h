@@ -1,19 +1,36 @@
-#pragma once
-/*
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
+/**
+ * @file bt_server.h
+ * @brief Peripheral role (GATT server): service 0xFFF0, characteristic 0xFFF6.
+ *
+ * Exposes a GATT service with a NOTIFY characteristic used to forward the bytes
+ * the radio sends to the module (S.Port/CRSF telemetry or slave trainer), and
+ * that a central can write to.
+ *
+ * Supports both Bluedroid and NimBLE (per `USE_NIMBLE`).
+ */
 
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
+#pragma once
 
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <stdint.h>
 
-void btpInit();
-void btp_disconnect();
-int btp_sendChannelData(uint8_t *data, int len);
+/** `true` while a BLE central is connected. */
+extern volatile bool bt_server_connected;
 
-extern volatile bool btp_connected;
+/** Initialize the GATT peripheral and start advertising. */
+void bt_server_init(void);
+
+/**
+ * @brief Send data over the notification characteristic.
+ *
+ * @param data  bytes to send.
+ * @param len   number of bytes.
+ * @return 0 on success, non-zero if not connected or the send failed.
+ */
+int bt_server_send_data(const uint8_t *data, int len);
+
+/**
+ * @brief Rebuild and re-apply the advertising data (e.g. after changing the
+ *        name via AT+NAME).
+ */
+void bt_server_refresh_advertising(void);

@@ -1,54 +1,56 @@
+/**
+ * @file cb.h
+ * @brief Byte circular buffer (FIFO) with a clear API and semantics.
+ *
+ * Index-based implementation (no pointer arithmetic) to ease verification. Not
+ * thread-safe: each instance must have a single producer and a single consumer,
+ * or be protected externally.
+ */
+
 #pragma once
 
-#include <stdlib.h>
-#include <string.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
+/** Byte circular buffer. */
+typedef struct {
+  uint8_t *buffer;    //< storage
+  size_t capacity;    //< maximum number of bytes
+  size_t count;       //< bytes currently stored
+  size_t head;        //< write index
+  size_t tail;        //< read index
+} cbuf_t;
 
-typedef struct circular_buffer {
-  char *buffer;      // data buffer
-  char *buffer_end;  // end of data buffer
-  size_t capacity;   // maximum number of items in the buffer
-  size_t count;      // number of items in the buffer
-  char *head;        // pointer to head
-  char *tail;        // pointer to tail
-} circular_buffer;
+/**
+ * @brief Allocate memory and initialize the buffer.
+ *
+ * @param cb        buffer to initialize.
+ * @param capacity  capacity in bytes (>= 1).
+ * @return `true` on success, `false` on allocation failure.
+ */
+bool cbuf_init(cbuf_t *cb, size_t capacity);
 
-void cb_init(circular_buffer *cb, size_t capacity)
-{
-  cb->buffer = malloc(capacity);
-  if (cb->buffer == NULL) {
-    // TODO: handle error
-  }
-  cb->buffer_end = cb->buffer + capacity;
-  cb->capacity = capacity;
-  cb->count = 0;
-  cb->head = cb->buffer;
-  cb->tail = cb->buffer;
-}
+/** Free the internal storage of the buffer. */
+void cbuf_free(cbuf_t *cb);
 
-void cb_free(circular_buffer *cb) { free(cb->buffer); }
+/**
+ * @brief Append a byte at the end of the buffer.
+ *
+ * @return `true` if inserted, `false` if the buffer is full.
+ */
+bool cbuf_push(cbuf_t *cb, uint8_t byte);
 
-int cb_push_back(circular_buffer *cb, char *item)
-{
-  if (cb->count == cb->capacity) return -1;
+/**
+ * @brief Remove the oldest byte from the buffer.
+ *
+ * @param[out] byte  removed byte (only valid if `true` is returned).
+ * @return `true` if removed, `false` if the buffer is empty.
+ */
+bool cbuf_pop(cbuf_t *cb, uint8_t *byte);
 
-  *cb->head = *item;
+/** @return number of stored bytes. */
+size_t cbuf_count(const cbuf_t *cb);
 
-  cb->head++;
-  if (cb->head == cb->buffer_end) cb->head = cb->buffer;
-  cb->count++;
-  return 0;
-}
-
-int cb_pop_front(circular_buffer *cb, char *item)
-{
-  if (cb->count == 0) {
-    return -1;
-  }
-  *item = *cb->tail;
-
-  cb->tail++;
-  if (cb->tail == cb->buffer_end) cb->tail = cb->buffer;
-  cb->count--;
-  return 0;
-}
+/** @return `true` if no bytes are stored. */
+bool cbuf_is_empty(const cbuf_t *cb);
