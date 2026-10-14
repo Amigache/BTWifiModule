@@ -2,41 +2,39 @@ name: Firmware Build
 
 on:
   push:
-    branches:
-      - main
+    branches: [main, 1.0-dev, 2.0-dev]
     paths:
       - '.github/workflows/build-firmware.yml'
       - 'src/**'
-
+      - 'test/**'
+      - 'include/**'
+      - 'platformio.ini'
+      - 'sdkconfig.*'
+      - 'boards/**'
+      - 'CMakeLists.txt'
   pull_request:
-    branches:
-      - main
     paths:
       - '.github/workflows/build-firmware.yml'
       - 'src/**'
-
+      - 'test/**'
+      - 'include/**'
+      - 'platformio.ini'
+      - 'sdkconfig.*'
+      - 'boards/**'
+      - 'CMakeLists.txt'
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
-    container:
-      image: shaguarger/platformio
-      volumes:
-        - ${{ github.workspace }}:/src
+    runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
-      - name: Cache pip
-        uses: actions/cache@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          python-version: '3.11'
 
       - name: Cache PlatformIO
         uses: actions/cache@v4
@@ -44,47 +42,36 @@ jobs:
           path: ~/.platformio
           key: ${{ runner.os }}-pio
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-
       - name: Install PlatformIO
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade platformio
 
-      # Runs a single command using the runners shell
-      - name: Build Firmware Pico32
-        run: |
-          cd /src
-          pio run -e pico32
+      - name: Unit tests (native)
+        run: pio test -e native
 
-      - name: Build Firmware Wroom32
-        run: |
-          cd /src
-          pio run -e Node32s_Wroom32
+      - name: Build C3SuperMini
+        run: pio run -e C3SuperMini
 
-      - name: Build Firmware C3Mini
-        run: |
-          cd /src
-          pio run -e C3Mini
+      - name: Build C3SuperMini (NimBLE)
+        run: pio run -e C3SuperMini_nimble
 
-      - name: Build Firmware C3SuperMini
-        run: |
-          cd /src
-          pio run -e C3SuperMini
-          
-      - name: Build Firmware RM_pico
-        run: |
-          cd /src
-          pio run -e RM_pico
-          
+      - name: Build C3Mini
+        run: pio run -e C3Mini
 
-      # Runs a set of commands using the runners shell
+      - name: Build Pico32
+        run: pio run -e pico32
+
+      - name: Build Node32s Wroom32
+        run: pio run -e Node32s_Wroom32
+
+      - name: Build RM_pico
+        run: pio run -e RM_pico
+
       - name: Package Firmware
-        uses: 'actions/upload-artifact@v4'
+        uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: |
-            /src/.pio/build/*/*.bin
+          path: .pio/build/*/*.bin
           retention-days: 60
           if-no-files-found: error
