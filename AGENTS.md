@@ -47,6 +47,8 @@ src/
   bt_client.c/h   GATT central (scan/connect/auto-connect).
   terminal.c/h    UART link: AT dispatch + connection state machines.
 test/             Unity unit tests (native).
+tools/            Bench tooling: sport_sender.py, at_bench.py.
+doc/BENCH.md      Bench setup, procedure and validated targets.
 ```
 
 ### Test conventions (PlatformIO Unity, native)
@@ -57,6 +59,14 @@ defines `test_*` functions plus a `run_xxx_tests()` that invokes `RUN_TEST` for
 its tests; `test_main.c` calls every `run_xxx_tests()` between
 `UNITY_BEGIN()`/`UNITY_END()`. Do not add `main()`/`app_main()` to module test
 files.
+
+### Bench conventions (hardware)
+
+Hardware validation lives in `doc/BENCH.md` and the scripts under `tools/`
+(`sport_sender.py` for S.Port injection, `at_bench.py` for the AT command
+bench). Run `tools/at_bench.py` before marking a target validated; all checks
+must pass. Keep the validated-target matrix in `doc/BENCH.md` and the summary in
+`README.md` up to date when a target is tested.
 
 ## Concurrency rules (do not regress)
 
@@ -95,8 +105,9 @@ pio test -e native              # host unit tests (requires gcc)
 
 - Platform: `espressif32@6.10.0` (ESP-IDF v5.4.0), matching the committed
   `sdkconfig.*` files.
-- `HappymodelEP82` (ESP8285) is intentionally **out of scope** and not built by
-  CI.
+- CI builds `C3SuperMini`, `C3SuperMini_nimble`, `C3Mini`, `pico32`,
+  `Node32s_Wroom32` and `RM_pico`. Only the ESP32-C3 SuperMini targets are
+  hardware-validated with this firmware (see `doc/BENCH.md`).
 - The logging console is routed to USB Serial JTAG (not UART0), because the
   radio uses GPIO20/21 on the C3 SuperMini.
 

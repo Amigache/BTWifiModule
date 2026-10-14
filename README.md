@@ -71,7 +71,9 @@ src/
   bt_client.c/h   GATT central (scan, connect, auto-connect).
   terminal.c/h    UART link: AT commands and state machines.
 test/             Unit tests (Unity).
-doc/AUDIT.md      EdgeTX integration audit.
+tools/            Bench tooling: sport_sender.py (S.Port injector) and
+                  at_bench.py (automated AT command bench).
+doc/BENCH.md      Bench setup, procedure and validation status.
 ```
 
 ## Building
@@ -90,6 +92,20 @@ pio run -e C3SuperMini_nimble -t upload   # NimBLE
 
 The Bluedroid path is kept behind `#if !defined(USE_NIMBLE)`, so both hosts
 share the same application code.
+
+## Validated targets
+
+Hardware validation status of the current firmware. The bench procedure is in
+`doc/BENCH.md`.
+
+| Target | BLE host | AT commands | Slave + telemetry | Master | Headtracker |
+|---|---|---|---|---|---|
+| ESP32-C3 SuperMini | Bluedroid | PASS | PASS | PASS | PASS |
+| ESP32-C3 SuperMini | NimBLE | PASS | PASS | PASS | PASS |
+
+The other board environments in `platformio.ini` (ESP32 Pico, C3 DevKitM-1,
+Node32s Wroom32, Radiomaster Pico) build in CI but are not hardware-validated
+with this version.
 
 ## Tests
 
