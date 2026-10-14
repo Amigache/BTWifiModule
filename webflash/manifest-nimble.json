@@ -1,0 +1,15 @@
+{
+  "name": "BTWifiModule (NimBLE)",
+  "version": "develop",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-C3",
+      "parts": [
+        { "path": "firmware/nimble/bootloader.bin", "offset": 0 },
+        { "path": "firmware/nimble/partitions.bin", "offset": 32768 },
+        { "path": "firmware/nimble/firmware.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}

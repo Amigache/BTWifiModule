@@ -93,6 +93,19 @@ pio run -e C3SuperMini_nimble -t upload   # NimBLE
 The Bluedroid path is kept behind `#if !defined(USE_NIMBLE)`, so both hosts
 share the same application code.
 
+## Web flasher
+
+A browser-based flasher (ESP Web Tools) is published from this repository
+through GitHub Pages. Open the Pages URL in a Chromium-based browser
+(Chrome/Edge) over HTTPS, connect the board over USB and pick a build:
+
+- **Bluedroid** (`C3SuperMini`)
+- **NimBLE** (`C3SuperMini_nimble`)
+
+The page is built and deployed by `.github/workflows/pages.yml`. Enable it once
+under **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+Press RESET on the board after flashing.
+
 ## Validated targets
 
 Hardware validation status of the current firmware. The bench procedure is in

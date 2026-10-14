@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BTWifiModule Web Flasher</title>
+  <script type="module"
+          src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 640px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.5;
+    }
+    h1 { margin-bottom: 0.25rem; }
+    .sub { opacity: 0.7; margin-top: 0; }
+    section {
+      border: 1px solid #8884;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+    }
+    section h2 { margin-top: 0; }
+    code { background: #8882; padding: 0.1em 0.3em; border-radius: 4px; }
+    .hint { font-size: 0.9rem; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <h1>BTWifiModule</h1>
+  <p class="sub">FrSky Bluetooth emulator for the ESP32-C3 SuperMini.</p>
+
+  <p class="hint">
+    Requires a Chromium-based browser (Chrome/Edge) over HTTPS or
+    <code>localhost</code>, and the board connected over USB. Press RESET on the
+    board after flashing (the firmware does not auto-reset).
+  </p>
+
+  <section>
+    <h2>Bluedroid (default)</h2>
+    <p>Standard ESP-IDF Bluetooth host.</p>
+    <esp-web-install-button manifest="manifest-bluedroid.json"></esp-web-install-button>
+  </section>
+
+  <section>
+    <h2>NimBLE</h2>
+    <p>Smaller footprint, recommended.</p>
+    <esp-web-install-button manifest="manifest-nimble.json"></esp-web-install-button>
+  </section>
+
+  <p class="hint">
+    After flashing, connect over serial at 115200 baud and configure the module
+    with the EdgeTX AT commands (see the project README).
+  </p>
+</body>
+</html>
