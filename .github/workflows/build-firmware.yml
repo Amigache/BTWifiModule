@@ -56,18 +56,6 @@ jobs:
       - name: Build C3SuperMini (NimBLE)
         run: pio run -e C3SuperMini_nimble
 
-      - name: Build C3Mini
-        run: pio run -e C3Mini
-
-      - name: Build Pico32
-        run: pio run -e pico32
-
-      - name: Build Node32s Wroom32
-        run: pio run -e Node32s_Wroom32
-
-      - name: Build RM_pico
-        run: pio run -e RM_pico
-
       - name: Package Firmware
         uses: actions/upload-artifact@v4
         with:

@@ -105,9 +105,9 @@ pio test -e native              # host unit tests (requires gcc)
 
 - Platform: `espressif32@6.10.0` (ESP-IDF v5.4.0), matching the committed
   `sdkconfig.*` files.
-- CI builds `C3SuperMini`, `C3SuperMini_nimble`, `C3Mini`, `pico32`,
-  `Node32s_Wroom32` and `RM_pico`. Only the ESP32-C3 SuperMini targets are
-  hardware-validated with this firmware (see `doc/BENCH.md`).
+- CI builds and validates `C3SuperMini` and `C3SuperMini_nimble` only. The
+  other environments in `platformio.ini` are kept for reference but are not
+  built by CI nor hardware-validated (see `doc/BENCH.md`).
 - The logging console is routed to USB Serial JTAG (not UART0), because the
   radio uses GPIO20/21 on the C3 SuperMini.
 

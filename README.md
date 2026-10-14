@@ -117,8 +117,8 @@ Hardware validation status of the current firmware. The bench procedure is in
 | ESP32-C3 SuperMini | NimBLE | PASS | PASS | PASS | PASS |
 
 The other board environments in `platformio.ini` (ESP32 Pico, C3 DevKitM-1,
-Node32s Wroom32, Radiomaster Pico) build in CI but are not hardware-validated
-with this version.
+Node32s Wroom32, Radiomaster Pico) are kept for reference but are neither built
+by CI nor hardware-validated with this version.
 
 ## Tests
 
