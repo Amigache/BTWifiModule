@@ -148,11 +148,6 @@ module:
 Responses: `OK+...`, `Central:<addr>`, `Peripheral:<addr>`, `Connected:<addr>`,
 `DisConnected`, `ERROR`.
 
-## Branches
-
-- `2.0-dev` — consolidated development branch (refactor + audit).
-- `1.0-dev` — previous development branch.
-
 ## Credits
 
 Original project: **dlktdr/BTWifiModule**. Bluetooth telemetry, auto-connect,
