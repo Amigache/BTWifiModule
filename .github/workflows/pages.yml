@@ -44,23 +44,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install --upgrade platformio
 
-      - name: Build C3SuperMini (Bluedroid)
-        run: pio run -e C3SuperMini
-
-      - name: Build C3SuperMini (NimBLE)
-        run: pio run -e C3SuperMini_nimble
+      - name: Build firmware (all board/host combinations)
+        run: |
+          pio run -e C3SuperMini -e C3SuperMini_nimble \
+                  -e ESP32_DEV38P -e ESP32_DEV38P_nimble
 
       - name: Assemble web flasher
         run: |
-          mkdir -p webflash/firmware/bluedroid webflash/firmware/nimble
-          cp .pio/build/C3SuperMini/bootloader.bin \
-             .pio/build/C3SuperMini/partitions.bin \
-             .pio/build/C3SuperMini/firmware.bin \
-             webflash/firmware/bluedroid/
-          cp .pio/build/C3SuperMini_nimble/bootloader.bin \
-             .pio/build/C3SuperMini_nimble/partitions.bin \
-             .pio/build/C3SuperMini_nimble/firmware.bin \
-             webflash/firmware/nimble/
+          set -eu
+          place() { # <env> <board> <host>
+            dest="webflash/firmware/$2/$3"
+            mkdir -p "$dest"
+            cp ".pio/build/$1/bootloader.bin" ".pio/build/$1/partitions.bin" \
+               ".pio/build/$1/firmware.bin" "$dest/"
+          }
+          place C3SuperMini          c3supermini bluedroid
+          place C3SuperMini_nimble   c3supermini nimble
+          place ESP32_DEV38P         esp32dev38p bluedroid
+          place ESP32_DEV38P_nimble  esp32dev38p nimble
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

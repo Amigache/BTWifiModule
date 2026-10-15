@@ -56,6 +56,12 @@ jobs:
       - name: Build C3SuperMini (NimBLE)
         run: pio run -e C3SuperMini_nimble
 
+      - name: Build ESP32-DEV-38P
+        run: pio run -e ESP32_DEV38P
+
+      - name: Build ESP32-DEV-38P (NimBLE)
+        run: pio run -e ESP32_DEV38P_nimble
+
       - name: Package Firmware
         uses: actions/upload-artifact@v4
         with:

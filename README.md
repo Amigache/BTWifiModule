@@ -80,10 +80,12 @@ doc/BENCH.md      Bench setup, procedure and validation status.
 
 PlatformIO (ESP-IDF). Two BLE hosts are selectable:
 
-| Environment | BLE host | Flash (C3, 1 MB app) | Notes |
+| Environment | BLE host | Flash (1 MB app) | Notes |
 |---|---|---|---|
-| `C3SuperMini` | Bluedroid (default) | ~84 % | |
-| `C3SuperMini_nimble` | NimBLE | ~52 % | smaller footprint, recommended |
+| `C3SuperMini` | Bluedroid (default) | ~84 % | ESP32-C3 SuperMini |
+| `C3SuperMini_nimble` | NimBLE | ~52 % | ESP32-C3 SuperMini, smaller footprint |
+| `ESP32_DEV38P` | Bluedroid | ~86 % | Seeit ESP32-DEV-38P |
+| `ESP32_DEV38P_nimble` | NimBLE | ~53 % | Seeit ESP32-DEV-38P |
 
 ```bash
 pio run -e C3SuperMini -t upload          # Bluedroid
@@ -97,11 +99,14 @@ share the same application code.
 
 A browser-based flasher (ESP Web Tools) is published from this repository
 through GitHub Pages. Open the Pages URL in a Chromium-based browser
-(Chrome/Edge) over HTTPS, connect the board over USB and pick a build:
+(Chrome/Edge) over HTTPS, connect the board over USB and pick a **board** and a
+**Bluetooth host**:
 
-- **Bluedroid** (`C3SuperMini`)
-- **NimBLE** (`C3SuperMini_nimble`)
+- Boards: **ESP32-C3 SuperMini** (`C3SuperMini*`) and **Seeit ESP32-DEV-38P**
+  (`ESP32_DEV38P*`).
+- Hosts: **Bluedroid** (default) and **NimBLE**.
 
+Every board is offered with both hosts (each combination is a separate build).
 The page is built and deployed by `.github/workflows/pages.yml`. Enable it once
 under **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 Press RESET on the board after flashing.
@@ -115,10 +120,14 @@ Hardware validation status of the current firmware. The bench procedure is in
 |---|---|---|---|---|---|
 | ESP32-C3 SuperMini | Bluedroid | PASS | PASS | PASS | PASS |
 | ESP32-C3 SuperMini | NimBLE | PASS | PASS | PASS | PASS |
+| Seeit ESP32-DEV-38P | Bluedroid | PASS | PASS | n/t | PASS |
+| Seeit ESP32-DEV-38P | NimBLE | PASS | PASS | n/t | PASS |
 
-The other board environments in `platformio.ini` (ESP32 Pico, C3 DevKitM-1,
-Node32s Wroom32, Radiomaster Pico) are kept for reference but are neither built
-by CI nor hardware-validated with this version.
+`n/t` = not tested (the ESP32-DEV-38P was validated against the phone and the
+headtracker, without a board-to-board master run). The other board environments
+in `platformio.ini` (ESP32 Pico, C3 DevKitM-1, Node32s Wroom32, Radiomaster
+Pico) are kept for reference but are neither built by CI nor hardware-validated
+with this version.
 
 ## Tests
 

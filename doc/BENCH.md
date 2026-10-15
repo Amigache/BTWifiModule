@@ -6,6 +6,10 @@ to repeat the same checks for each BLE host (Bluedroid and NimBLE).
 ## Hardware
 
 - ESP32-C3 SuperMini (`PCB_C3SUPERMINI`), flashed over native USB.
+- Seeit ESP32-DEV-38P (ESP32 classic, `ESP32_DEV38P*`): radio UART on
+  GPIO18 (TX) / GPIO19 (RX); logs on UART0 (its CP2102 bridge). Its auto-reset
+  does not drive IO0, so enter download mode manually (hold BOOT, tap RESET)
+  before flashing.
 - USB-UART adapter (FTDI) on COM10: TX wired to the module RX (UART link
   used for AT commands and telemetry injection), 115200 baud.
 - Phone with the telemetry app (Android Taranis SmartPort app, RomanLut fork).
@@ -23,8 +27,10 @@ to repeat the same checks for each BLE host (Bluedroid and NimBLE).
 Build and flash with PlatformIO, or with esptool from `.pio/build/<env>/`:
 
 ```bash
-pio run -e C3SuperMini -t upload          # Bluedroid
-pio run -e C3SuperMini_nimble -t upload   # NimBLE
+pio run -e C3SuperMini -t upload          # C3 SuperMini, Bluedroid
+pio run -e C3SuperMini_nimble -t upload   # C3 SuperMini, NimBLE
+pio run -e ESP32_DEV38P -t upload         # ESP32-DEV-38P, Bluedroid
+pio run -e ESP32_DEV38P_nimble -t upload  # ESP32-DEV-38P, NimBLE
 ```
 
 If the board does not reset cleanly, power-cycle it and use the manual
@@ -134,6 +140,16 @@ Both BLE hosts validated with two modules (A under test, B as peripheral peer):
 | Master: data path (peer -> local UART)  | PASS      | PASS   |
 | Headtracker: detect + channels + reset  | PASS      | PASS   |
 | Cross-host interop (Bluedroid <-> NimBLE) | PASS    | PASS   |
+
+Seeit ESP32-DEV-38P (`ESP32_DEV38P*`), single board against the phone and the
+headtracker (no board-to-board master run):
+
+| Check                                   | Bluedroid | NimBLE |
+|-----------------------------------------|-----------|--------|
+| Boot + advertising                      | PASS      | PASS   |
+| AT command bench (16 checks)            | PASS      | PASS   |
+| Slave: telemetry to the phone app       | PASS      | PASS   |
+| Headtracker: detect + channels + reset  | PASS      | PASS   |
 
 ## Automated battery
 

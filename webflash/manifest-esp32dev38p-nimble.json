@@ -1,0 +1,15 @@
+{
+  "name": "BTWifiModule (Seeit ESP32-DEV-38P, NimBLE)",
+  "version": "develop",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "firmware/esp32dev38p/nimble/bootloader.bin", "offset": 4096 },
+        { "path": "firmware/esp32dev38p/nimble/partitions.bin", "offset": 32768 },
+        { "path": "firmware/esp32dev38p/nimble/firmware.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}
