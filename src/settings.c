@@ -95,6 +95,16 @@ void settings_load(void)
   lock();
   settings_t loaded;
   read_from_nvs(&loaded);
+  // Guard against a corrupted or foreign blob (e.g. written by another
+  // firmware). An out-of-range role would otherwise leave Bluetooth never
+  // initialized, because setRole() ignores unknown values.
+  if ((int)loaded.role < 0 || loaded.role >= ROLE_COUNT) {
+    ESP_LOGW(LOG_SET, "Invalid saved role (%d), resetting to default", (int)loaded.role);
+    loaded.role = ROLE_UNKNOWN;
+  }
+  // Make sure the strings are terminated even if the blob was damaged.
+  loaded.name[LEN_BLUETOOTH_NAME - 1] = '\0';
+  loaded.rmtbtaddr[BT_ADDR_STR_LEN - 1] = '\0';
   settings = loaded;
   settings_ok = true;
   unlock();
