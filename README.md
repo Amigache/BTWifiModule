@@ -59,12 +59,18 @@ from a supply that can handle the ESP32 current peaks.
 |---|---|---|---|---|
 | ESP32-C3 SuperMini | UART1 | GPIO21 | GPIO20 | native USB Serial/JTAG |
 | ESP32-DEV-38P | UART2 | GPIO18 | GPIO19 | on-board CP2102 (UART0) |
+| ESP32 Pico Kit *(reference)* | UART2 | GPIO4 | GPIO5 | UART0 (default console) |
+| Radiomaster Pico *(reference)* | UART0 | GPIO1 | GPIO3 | UART1 — GPIO20 (TX) / GPIO19 (RX) |
 
 The pins are selected per environment through the `PCB_*` macro in
 `src/board.h`. On the C3 SuperMini the radio uses UART1 on GPIO20/21 (the
 default UART0 pins), so the log console is routed to the native USB Serial/JTAG
 port instead of UART0; on the ESP32-DEV-38P the on-board CP2102 bridge keeps
-UART0 free for flashing and logs.
+UART0 free for flashing and logs. On the Radiomaster Pico the radio link uses
+UART0, so the log console is moved to UART1.
+
+The last two rows are the reference, non-validated targets (see
+[Validated targets](#validated-targets)).
 
 ## EdgeTX protocol
 
@@ -117,9 +123,9 @@ hardware-validated):
 
 | Environment | BLE host | Flash | Board |
 |---|---|---|---|
-| `RM_pico` | Bluedroid | ~65 % | Radiomaster Pico — radio UART GPIO1 (TX) / GPIO3 (RX) |
+| `RM_pico` | Bluedroid | ~65 % | Radiomaster Pico |
 | `RM_pico_nimble` | NimBLE | ~41 % | Radiomaster Pico |
-| `pico32` | Bluedroid | ~65 % | ESP32 Pico Kit — radio UART GPIO4 (TX) / GPIO5 (RX) |
+| `pico32` | Bluedroid | ~65 % | ESP32 Pico Kit |
 | `pico32_nimble` | NimBLE | ~41 % | ESP32 Pico Kit |
 
 ```bash
@@ -129,9 +135,8 @@ pio run -e RM_pico -t upload              # Radiomaster Pico, Bluedroid
 ```
 
 The Bluedroid path is kept behind `#if !defined(USE_NIMBLE)`, so both hosts
-share the same application code. The two Pico boards differ in the radio UART
-pins; `RM_pico` moves the log console to UART1 (GPIO20/19) because its radio
-link uses UART0.
+share the same application code. See [Wiring](#wiring) for the UART pins of each
+board.
 
 ## Web flasher
 
