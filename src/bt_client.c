@@ -497,6 +497,7 @@ static esp_gattc_char_elem_t *char_elem_result = NULL;
 static esp_gattc_descr_elem_t *descr_elem_result = NULL;
 
 static bool s_readytoscan = false;
+static volatile bool s_scanning = false;
 static uint16_t s_datahandle;
 static uint16_t s_htresethandle;
 
@@ -596,11 +597,19 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
                                     ESP_BLE_GAP_PHY_OPTIONS_PREF_S8_CODING);
 #endif
       bt_client_scan_complete = false;
-      ESP_LOGI(GATTC_TAG, "Starting Service Scan");
-      esp_ble_gattc_search_service(gattc_if, param->cfg_mtu.conn_id, &remote_filter_service_uuid);
       gattc_update_connection_params(&param->connect.remote_bda);
       break;
     }
+
+    case ESP_GATTC_CFG_MTU_EVT:
+      // Start the service discovery only once the MTU exchange has finished.
+      // Issuing it together with the MTU request (as before) overlaps two GATT
+      // client operations and makes Bluedroid fail with GATT_BUSY, dropping
+      // the connection.
+      ESP_LOGI(GATTC_TAG, "MTU configured %d (status %d), starting service scan",
+               param->cfg_mtu.mtu, param->cfg_mtu.status);
+      esp_ble_gattc_search_service(gattc_if, param->cfg_mtu.conn_id, &remote_filter_service_uuid);
+      break;
 
     case ESP_GATTC_DIS_SRVC_CMPL_EVT:
       if (param->dis_srvc_cmpl.status != ESP_GATT_OK) {
@@ -763,6 +772,8 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
     case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
       if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS) {
         ESP_LOGE(GATTC_TAG, "scan start failed, error status = %x", param->scan_start_cmpl.status);
+      } else {
+        s_scanning = true;
       }
       break;
 
@@ -789,6 +800,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         }
         case ESP_GAP_SEARCH_INQ_CMPL_EVT:
           bt_client_scan_complete = true;
+          s_scanning = false;
           break;
         default:
           break;
@@ -800,6 +812,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
       if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS) {
         ESP_LOGE(GATTC_TAG, "scan stop failed, error status = %x", param->scan_stop_cmpl.status);
       }
+      s_scanning = false;
       break;
 
     case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
@@ -862,15 +875,20 @@ void bt_client_start_scan(void)
   printf("Clearing Addresses\r\n");
   // Stop any in-progress scan first (e.g. the endless auto-connect scan);
   // otherwise the new timed scan is rejected and the state machine never
-  // reports "OK+DISCE".
-  esp_ble_gap_stop_scanning();
+  // reports "OK+DISCE". Only stop when a scan is actually running, to avoid a
+  // spurious "scan stop failed" log.
+  if (s_scanning) {
+    esp_ble_gap_stop_scanning();
+  }
   uint32_t duration = 1;
   esp_ble_gap_start_scanning(duration);
 }
 
 void bt_client_scan_stop(void)
 {
-  esp_ble_gap_stop_scanning();
+  if (s_scanning) {
+    esp_ble_gap_stop_scanning();
+  }
 }
 
 bool bt_client_has_saved_address(void)
