@@ -1,0 +1,15 @@
+{
+  "name": "BTWifiModule (Radiomaster Pico, Bluedroid)",
+  "version": "develop",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "firmware/rmpico/bluedroid/bootloader.bin", "offset": 4096 },
+        { "path": "firmware/rmpico/bluedroid/partitions.bin", "offset": 32768 },
+        { "path": "firmware/rmpico/bluedroid/firmware.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}

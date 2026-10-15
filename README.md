@@ -90,29 +90,48 @@ src/
   bt_client.c/h   GATT central (scan, connect, auto-connect).
   terminal.c/h    UART link: AT commands and state machines.
 test/             Unit tests (Unity).
-tools/            Bench tooling: sport_sender.py (S.Port injector) and
-                  at_bench.py (automated AT command bench).
+tools/            Bench tooling: sport_sender.py (S.Port injector),
+                  at_bench.py (AT bench) and battery.py (two-board tests).
+boards/           Custom PlatformIO board definitions (Pico, Node32s,
+                  ESP32-DEV-38P).
+webflash/         Browser flasher page (ESP Web Tools) and its manifests.
 doc/BENCH.md      Bench setup, procedure and validation status.
 ```
 
 ## Building
 
-PlatformIO (ESP-IDF). Two BLE hosts are selectable:
+PlatformIO (ESP-IDF). Two BLE hosts are selectable: Bluedroid (default) or
+NimBLE.
 
-| Environment | BLE host | Flash (1 MB app) | Notes |
+**Supported targets** (app partition 1 MB):
+
+| Environment | BLE host | Flash | Board |
 |---|---|---|---|
-| `C3SuperMini` | Bluedroid (default) | ~84 % | ESP32-C3 SuperMini |
-| `C3SuperMini_nimble` | NimBLE | ~52 % | ESP32-C3 SuperMini, smaller footprint |
+| `C3SuperMini` | Bluedroid | ~84 % | ESP32-C3 SuperMini |
+| `C3SuperMini_nimble` | NimBLE | ~52 % | ESP32-C3 SuperMini |
 | `ESP32_DEV38P` | Bluedroid | ~86 % | ESP32-DEV-38P |
 | `ESP32_DEV38P_nimble` | NimBLE | ~53 % | ESP32-DEV-38P |
 
+**Reference targets** (app partition 1.31 MB via `pico_partitions.csv`, not
+hardware-validated):
+
+| Environment | BLE host | Flash | Board |
+|---|---|---|---|
+| `RM_pico` | Bluedroid | ~65 % | Radiomaster Pico — radio UART GPIO1 (TX) / GPIO3 (RX) |
+| `RM_pico_nimble` | NimBLE | ~41 % | Radiomaster Pico |
+| `pico32` | Bluedroid | ~65 % | ESP32 Pico Kit — radio UART GPIO4 (TX) / GPIO5 (RX) |
+| `pico32_nimble` | NimBLE | ~41 % | ESP32 Pico Kit |
+
 ```bash
-pio run -e C3SuperMini -t upload          # Bluedroid
-pio run -e C3SuperMini_nimble -t upload   # NimBLE
+pio run -e C3SuperMini -t upload          # C3 SuperMini, Bluedroid
+pio run -e C3SuperMini_nimble -t upload   # C3 SuperMini, NimBLE
+pio run -e RM_pico -t upload              # Radiomaster Pico, Bluedroid
 ```
 
 The Bluedroid path is kept behind `#if !defined(USE_NIMBLE)`, so both hosts
-share the same application code.
+share the same application code. The two Pico boards differ in the radio UART
+pins; `RM_pico` moves the log console to UART1 (GPIO20/19) because its radio
+link uses UART0.
 
 ## Web flasher
 
@@ -123,6 +142,9 @@ through GitHub Pages. Open the Pages URL in a Chromium-based browser
 
 - Boards: **ESP32-C3 SuperMini** (`C3SuperMini*`) and **ESP32-DEV-38P**
   (`ESP32_DEV38P*`).
+- Reference builds (not hardware-validated): **Radiomaster Pico** (`RM_pico*`)
+  and **ESP32 Pico Kit** (`pico32*`). They differ in the radio UART pins, so if
+  one does not work, try the other.
 - Hosts: **Bluedroid** (default) and **NimBLE**.
 
 Every board is offered with both hosts (each combination is a separate build).
@@ -143,10 +165,12 @@ Hardware validation status of the current firmware. The bench procedure is in
 | ESP32-DEV-38P | NimBLE | PASS | PASS | n/t | PASS |
 
 `n/t` = not tested (the ESP32-DEV-38P was validated against the phone and the
-headtracker, without a board-to-board master run). The other board environments
-in `platformio.ini` (ESP32 Pico, C3 DevKitM-1, Node32s Wroom32, Radiomaster
-Pico) are kept for reference but are neither built by CI nor hardware-validated
-with this version.
+headtracker, without a board-to-board master run).
+
+The other board environments in `platformio.ini` (ESP32 Pico, C3 DevKitM-1,
+Node32s Wroom32, Radiomaster Pico) are kept for reference and are not
+hardware-validated with this version. The two Pico ones are additionally built
+by the web flasher workflow so they can be tried from the browser.
 
 ## Tests
 

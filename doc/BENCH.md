@@ -10,6 +10,10 @@ to repeat the same checks for each BLE host (Bluedroid and NimBLE).
   GPIO18 (TX) / GPIO19 (RX); logs on UART0 (its CP2102 bridge). Its auto-reset
   does not drive IO0, so enter download mode manually (hold BOOT, tap RESET)
   before flashing.
+- Reference only (not validated): ESP32 Pico Kit (`pico32`, `pico32_nimble`,
+  radio UART GPIO4 TX / GPIO5 RX) and Radiomaster Pico (`RM_pico`,
+  `RM_pico_nimble`, radio UART GPIO1 TX / GPIO3 RX, console on UART1
+  GPIO20/19).
 - USB-UART adapter (FTDI) on COM10: TX wired to the module RX (UART link
   used for AT commands and telemetry injection), 115200 baud.
 - Phone with the telemetry app (Android Taranis SmartPort app, RomanLut fork).

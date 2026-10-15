@@ -1,0 +1,15 @@
+{
+  "name": "BTWifiModule (Radiomaster Pico, NimBLE)",
+  "version": "develop",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "firmware/rmpico/nimble/bootloader.bin", "offset": 4096 },
+        { "path": "firmware/rmpico/nimble/partitions.bin", "offset": 32768 },
+        { "path": "firmware/rmpico/nimble/firmware.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}

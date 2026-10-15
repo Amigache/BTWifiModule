@@ -1,0 +1,15 @@
+{
+  "name": "BTWifiModule (ESP32 Pico Kit, NimBLE)",
+  "version": "develop",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "firmware/pico32/nimble/bootloader.bin", "offset": 4096 },
+        { "path": "firmware/pico32/nimble/partitions.bin", "offset": 32768 },
+        { "path": "firmware/pico32/nimble/firmware.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}
