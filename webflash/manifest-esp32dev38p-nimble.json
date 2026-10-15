@@ -1,5 +1,5 @@
 {
-  "name": "BTWifiModule (Seeit ESP32-DEV-38P, NimBLE)",
+  "name": "BTWifiModule (ESP32-DEV-38P, NimBLE)",
   "version": "develop",
   "new_install_prompt_erase": true,
   "builds": [

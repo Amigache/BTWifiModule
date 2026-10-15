@@ -38,14 +38,33 @@ service (`0xFFF0`, characteristic `0xFFF6`, NOTIFY).
 
 ## Hardware
 
-- **ESP32-C3 SuperMini** (primary target); the other boards are listed in
-  `platformio.ini`.
-- UART to the radio: **GPIO20 (RX) / GPIO21 (TX)** on the C3 SuperMini.
+- Primary target: **ESP32-C3 SuperMini**; also supported: **ESP32-DEV-38P**.
+  The other board environments in `platformio.ini` are kept for reference (see
+  [Validated targets](#validated-targets)).
 - **Radiomaster TX16S MK3** with **EdgeTX** (a recent nightly is recommended).
 
 > **TX16S MK3 note.** EdgeTX needs PR #7855 (`BT_PWR_GPIO = PC13` in
 > `targets/tx16smk3/hal.h`) to power the AUX2/BT connector. It is included in
 > current nightlies.
+
+## Wiring
+
+The module talks to the radio over a 3.3 V UART link (8N1, 115200 baud). Only
+TX, RX and GND are required; add +5V if the module is powered from the radio.
+The data lines are **crossed**: the module TX goes to the radio RX and the
+module RX to the radio TX. Keep GND common with the radio, and power the module
+from a supply that can handle the ESP32 current peaks.
+
+| Board | UART | Module TX -> radio RX | Module RX <- radio TX | Flash / logs |
+|---|---|---|---|---|
+| ESP32-C3 SuperMini | UART1 | GPIO21 | GPIO20 | native USB Serial/JTAG |
+| ESP32-DEV-38P | UART2 | GPIO18 | GPIO19 | on-board CP2102 (UART0) |
+
+The pins are selected per environment through the `PCB_*` macro in
+`src/board.h`. On the C3 SuperMini the radio uses UART1 on GPIO20/21 (the
+default UART0 pins), so the log console is routed to the native USB Serial/JTAG
+port instead of UART0; on the ESP32-DEV-38P the on-board CP2102 bridge keeps
+UART0 free for flashing and logs.
 
 ## EdgeTX protocol
 
@@ -84,8 +103,8 @@ PlatformIO (ESP-IDF). Two BLE hosts are selectable:
 |---|---|---|---|
 | `C3SuperMini` | Bluedroid (default) | ~84 % | ESP32-C3 SuperMini |
 | `C3SuperMini_nimble` | NimBLE | ~52 % | ESP32-C3 SuperMini, smaller footprint |
-| `ESP32_DEV38P` | Bluedroid | ~86 % | Seeit ESP32-DEV-38P |
-| `ESP32_DEV38P_nimble` | NimBLE | ~53 % | Seeit ESP32-DEV-38P |
+| `ESP32_DEV38P` | Bluedroid | ~86 % | ESP32-DEV-38P |
+| `ESP32_DEV38P_nimble` | NimBLE | ~53 % | ESP32-DEV-38P |
 
 ```bash
 pio run -e C3SuperMini -t upload          # Bluedroid
@@ -102,7 +121,7 @@ through GitHub Pages. Open the Pages URL in a Chromium-based browser
 (Chrome/Edge) over HTTPS, connect the board over USB and pick a **board** and a
 **Bluetooth host**:
 
-- Boards: **ESP32-C3 SuperMini** (`C3SuperMini*`) and **Seeit ESP32-DEV-38P**
+- Boards: **ESP32-C3 SuperMini** (`C3SuperMini*`) and **ESP32-DEV-38P**
   (`ESP32_DEV38P*`).
 - Hosts: **Bluedroid** (default) and **NimBLE**.
 
@@ -120,8 +139,8 @@ Hardware validation status of the current firmware. The bench procedure is in
 |---|---|---|---|---|---|
 | ESP32-C3 SuperMini | Bluedroid | PASS | PASS | PASS | PASS |
 | ESP32-C3 SuperMini | NimBLE | PASS | PASS | PASS | PASS |
-| Seeit ESP32-DEV-38P | Bluedroid | PASS | PASS | n/t | PASS |
-| Seeit ESP32-DEV-38P | NimBLE | PASS | PASS | n/t | PASS |
+| ESP32-DEV-38P | Bluedroid | PASS | PASS | n/t | PASS |
+| ESP32-DEV-38P | NimBLE | PASS | PASS | n/t | PASS |
 
 `n/t` = not tested (the ESP32-DEV-38P was validated against the phone and the
 headtracker, without a board-to-board master run). The other board environments

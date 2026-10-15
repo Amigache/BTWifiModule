@@ -22,7 +22,7 @@
     "arduino",
     "espidf"
   ],
-  "name": "Seeit ESP32-DEV-38P",
+  "name": "ESP32-DEV-38P",
   "upload": {
     "flash_size": "4MB",
     "maximum_ram_size": 327680,
@@ -31,5 +31,5 @@
     "speed": 460800
   },
   "url": "https://es.rs-online.com/web/p/kits-de-desarrollo-de-microcontroladores/2863991",
-  "vendor": "Seeit"
+  "vendor": "Espressif"
 }

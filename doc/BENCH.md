@@ -6,7 +6,7 @@ to repeat the same checks for each BLE host (Bluedroid and NimBLE).
 ## Hardware
 
 - ESP32-C3 SuperMini (`PCB_C3SUPERMINI`), flashed over native USB.
-- Seeit ESP32-DEV-38P (ESP32 classic, `ESP32_DEV38P*`): radio UART on
+- ESP32-DEV-38P (ESP32 classic, `ESP32_DEV38P*`): radio UART on
   GPIO18 (TX) / GPIO19 (RX); logs on UART0 (its CP2102 bridge). Its auto-reset
   does not drive IO0, so enter download mode manually (hold BOOT, tap RESET)
   before flashing.
@@ -141,7 +141,7 @@ Both BLE hosts validated with two modules (A under test, B as peripheral peer):
 | Headtracker: detect + channels + reset  | PASS      | PASS   |
 | Cross-host interop (Bluedroid <-> NimBLE) | PASS    | PASS   |
 
-Seeit ESP32-DEV-38P (`ESP32_DEV38P*`), single board against the phone and the
+ESP32-DEV-38P (`ESP32_DEV38P*`), single board against the phone and the
 headtracker (no board-to-board master run):
 
 | Check                                   | Bluedroid | NimBLE |
