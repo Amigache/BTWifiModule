@@ -48,6 +48,7 @@ jobs:
         run: |
           pio run -e C3SuperMini -e C3SuperMini_nimble \
                   -e ESP32_DEV38P -e ESP32_DEV38P_nimble \
+                  -e ESP32S3SuperMini -e ESP32S3SuperMini_nimble \
                   -e RM_pico -e RM_pico_nimble \
                   -e pico32 -e pico32_nimble
 
@@ -64,6 +65,8 @@ jobs:
           place C3SuperMini_nimble   c3supermini nimble
           place ESP32_DEV38P         esp32dev38p bluedroid
           place ESP32_DEV38P_nimble  esp32dev38p nimble
+          place ESP32S3SuperMini     esp32s3supermini bluedroid
+          place ESP32S3SuperMini_nimble esp32s3supermini nimble
           place RM_pico              rmpico      bluedroid
           place RM_pico_nimble       rmpico      nimble
           place pico32               pico32      bluedroid

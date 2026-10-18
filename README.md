@@ -39,7 +39,8 @@ service (`0xFFF0`, characteristic `0xFFF6`, NOTIFY).
 ## Hardware
 
 - Primary target: **ESP32-C3 SuperMini**; also supported: **ESP32-DEV-38P**.
-  The other board environments in `platformio.ini` are kept for reference (see
+  The other board environments in `platformio.ini` (including the
+  **ESP32-S3 SuperMini**) are kept for reference (see
   [Validated targets](#validated-targets)).
 - **Radiomaster TX16S MK3** with **EdgeTX** (a recent nightly is recommended).
 
@@ -59,17 +60,19 @@ from a supply that can handle the ESP32 current peaks.
 |---|---|---|---|---|
 | ESP32-C3 SuperMini | UART1 | GPIO21 | GPIO20 | native USB Serial/JTAG |
 | ESP32-DEV-38P | UART2 | GPIO18 | GPIO19 | on-board CP2102 (UART0) |
+| ESP32-S3 SuperMini *(reference)* | UART1 | GPIO43 | GPIO44 | native USB Serial/JTAG |
 | ESP32 Pico Kit *(reference)* | UART2 | GPIO4 | GPIO5 | UART0 (default console) |
 | Radiomaster Pico *(reference)* | UART0 | GPIO1 | GPIO3 | UART1 — GPIO20 (TX) / GPIO19 (RX) |
 
 The pins are selected per environment through the `PCB_*` macro in
 `src/board.h`. On the C3 SuperMini the radio uses UART1 on GPIO20/21 (the
 default UART0 pins), so the log console is routed to the native USB Serial/JTAG
-port instead of UART0; on the ESP32-DEV-38P the on-board CP2102 bridge keeps
-UART0 free for flashing and logs. On the Radiomaster Pico the radio link uses
-UART0, so the log console is moved to UART1.
+port instead of UART0; the ESP32-S3 SuperMini uses the same approach with the
+default UART0 pins on GPIO43/44. On the ESP32-DEV-38P the on-board CP2102
+bridge keeps UART0 free for flashing and logs. On the Radiomaster Pico the radio
+link uses UART0, so the log console is moved to UART1.
 
-The last two rows are the reference, non-validated targets (see
+The reference rows are the non-validated targets (see
 [Validated targets](#validated-targets)).
 
 ## EdgeTX protocol
@@ -99,7 +102,7 @@ test/             Unit tests (Unity).
 tools/            Bench tooling: sport_sender.py (S.Port injector),
                   at_bench.py (AT bench) and battery.py (two-board tests).
 boards/           Custom PlatformIO board definitions (Pico, Node32s,
-                  ESP32-DEV-38P).
+                  ESP32-DEV-38P, ESP32-S3 SuperMini).
 webflash/         Browser flasher page (ESP Web Tools) and its manifests.
 doc/BENCH.md      Bench setup, procedure and validation status.
 ```
@@ -118,11 +121,14 @@ NimBLE.
 | `ESP32_DEV38P` | Bluedroid | ~86 % | ESP32-DEV-38P |
 | `ESP32_DEV38P_nimble` | NimBLE | ~53 % | ESP32-DEV-38P |
 
-**Reference targets** (app partition 1.31 MB via `pico_partitions.csv`, not
-hardware-validated):
+**Reference targets** (not hardware-validated). The ESP32-S3 SuperMini uses the
+default 1 MB app partition; the Pico boards use 1.31 MB via
+`pico_partitions.csv`:
 
 | Environment | BLE host | Flash | Board |
 |---|---|---|---|
+| `ESP32S3SuperMini` | Bluedroid | ~78 % | ESP32-S3 SuperMini |
+| `ESP32S3SuperMini_nimble` | NimBLE | ~52 % | ESP32-S3 SuperMini |
 | `RM_pico` | Bluedroid | ~65 % | Radiomaster Pico |
 | `RM_pico_nimble` | NimBLE | ~41 % | Radiomaster Pico |
 | `pico32` | Bluedroid | ~65 % | ESP32 Pico Kit |
@@ -131,6 +137,7 @@ hardware-validated):
 ```bash
 pio run -e C3SuperMini -t upload          # C3 SuperMini, Bluedroid
 pio run -e C3SuperMini_nimble -t upload   # C3 SuperMini, NimBLE
+pio run -e ESP32S3SuperMini -t upload     # ESP32-S3 SuperMini, Bluedroid
 pio run -e RM_pico -t upload              # Radiomaster Pico, Bluedroid
 ```
 
@@ -147,9 +154,10 @@ through GitHub Pages. Open the Pages URL in a Chromium-based browser
 
 - Boards: **ESP32-C3 SuperMini** (`C3SuperMini*`) and **ESP32-DEV-38P**
   (`ESP32_DEV38P*`).
-- Reference builds (not hardware-validated): **Radiomaster Pico** (`RM_pico*`)
-  and **ESP32 Pico Kit** (`pico32*`). They differ in the radio UART pins, so if
-  one does not work, try the other.
+- Reference builds (not hardware-validated): **ESP32-S3 SuperMini**
+  (`ESP32S3SuperMini*`), **Radiomaster Pico** (`RM_pico*`) and **ESP32 Pico Kit**
+  (`pico32*`). They differ in the radio UART pins, so if one does not work, try
+  the other.
 - Hosts: **Bluedroid** (default) and **NimBLE**.
 
 Every board is offered with both hosts (each combination is a separate build).
@@ -172,10 +180,11 @@ Hardware validation status of the current firmware. The bench procedure is in
 `n/t` = not tested (the ESP32-DEV-38P was validated against the phone and the
 headtracker, without a board-to-board master run).
 
-The other board environments in `platformio.ini` (ESP32 Pico, C3 DevKitM-1,
-Node32s Wroom32, Radiomaster Pico) are kept for reference and are not
-hardware-validated with this version. The two Pico ones are additionally built
-by the web flasher workflow so they can be tried from the browser.
+The other board environments in `platformio.ini` (ESP32 Pico, ESP32-S3
+SuperMini, C3 DevKitM-1, Node32s Wroom32, Radiomaster Pico) are kept for
+reference and are not hardware-validated with this version. The ESP32-S3
+SuperMini and the two Pico boards are additionally built by the web flasher
+workflow so they can be tried from the browser.
 
 ## Tests
 

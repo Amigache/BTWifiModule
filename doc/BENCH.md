@@ -10,10 +10,11 @@ to repeat the same checks for each BLE host (Bluedroid and NimBLE).
   GPIO18 (TX) / GPIO19 (RX); logs on UART0 (its CP2102 bridge). Its auto-reset
   does not drive IO0, so enter download mode manually (hold BOOT, tap RESET)
   before flashing.
-- Reference only (not validated): ESP32 Pico Kit (`pico32`, `pico32_nimble`,
-  radio UART GPIO4 TX / GPIO5 RX) and Radiomaster Pico (`RM_pico`,
-  `RM_pico_nimble`, radio UART GPIO1 TX / GPIO3 RX, console on UART1
-  GPIO20/19).
+- Reference only (not validated): ESP32-S3 SuperMini (`ESP32S3SuperMini`,
+  `ESP32S3SuperMini_nimble`, radio UART GPIO43 TX / GPIO44 RX, native USB
+  console), ESP32 Pico Kit (`pico32`, `pico32_nimble`, radio UART GPIO4 TX /
+  GPIO5 RX) and Radiomaster Pico (`RM_pico`, `RM_pico_nimble`, radio UART
+  GPIO1 TX / GPIO3 RX, console on UART1 GPIO20/19).
 - USB-UART adapter (FTDI) on COM10: TX wired to the module RX (UART link
   used for AT commands and telemetry injection), 115200 baud.
 - Phone with the telemetry app (Android Taranis SmartPort app, RomanLut fork).
@@ -35,6 +36,8 @@ pio run -e C3SuperMini -t upload          # C3 SuperMini, Bluedroid
 pio run -e C3SuperMini_nimble -t upload   # C3 SuperMini, NimBLE
 pio run -e ESP32_DEV38P -t upload         # ESP32-DEV-38P, Bluedroid
 pio run -e ESP32_DEV38P_nimble -t upload  # ESP32-DEV-38P, NimBLE
+pio run -e ESP32S3SuperMini -t upload     # ESP32-S3 SuperMini, Bluedroid
+pio run -e ESP32S3SuperMini_nimble -t upload  # ESP32-S3 SuperMini, NimBLE
 ```
 
 If the board does not reset cleanly, power-cycle it and use the manual

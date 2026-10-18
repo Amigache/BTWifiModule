@@ -8,7 +8,8 @@
  * physical parameters of the serial link with the radio.
  *
  * Primary target: ESP32-C3 SuperMini (`PCB_C3SUPERMINI`), which connects the
- * radio to UART1 on GPIO20 (RX) / GPIO21 (TX).
+ * radio to UART1 on GPIO20 (RX) / GPIO21 (TX). Reference target: ESP32-S3
+ * SuperMini (`PCB_S3SUPERMINI`), which uses UART1 on GPIO43 (TX) / GPIO44 (RX).
  */
 
 #pragma once
@@ -51,8 +52,16 @@
   #define UART_TXPIN 21
   #define UART_RXPIN 20
 
+#elif defined(PCB_S3SUPERMINI)
+  // ESP32-S3 SuperMini (reference target)
+  //   GPIO43 = TX (module TX -> radio RX)
+  //   GPIO44 = RX (radio TX -> module RX)
+  #define UART_NUM   UART_NUM_1
+  #define UART_TXPIN 43
+  #define UART_RXPIN 44
+
 #else
-  #error "PCB_NOT_CONFIGURED: define PCB_PICO / PCB_RMPICO / PCB_WROOM / PCB_C3MINI / PCB_C3SUPERMINI"
+  #error "PCB_NOT_CONFIGURED: define PCB_PICO / PCB_RMPICO / PCB_WROOM / PCB_C3MINI / PCB_C3SUPERMINI / PCB_S3SUPERMINI"
 #endif
 
 /* ------------------------------------------------------------------------- */

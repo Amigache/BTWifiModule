@@ -11,9 +11,9 @@ and exposes BLE (GATT service `0xFFF0`, characteristic `0xFFF6`).
 
 - Primary target: **ESP32-C3 SuperMini** (`PCB_C3SUPERMINI`). **ESP32-DEV-38P**
   (`PCB_WROOM`, environments `ESP32_DEV38P*`) is the second supported board.
-- Reference targets (not hardware-validated): the ESP32 Pico entries
-  (`pico32`, `RM_pico` and their `_nimble` variants), kept for community
-  testing.
+- Reference targets (not hardware-validated): the **ESP32-S3 SuperMini**
+  (`ESP32S3SuperMini*`) and the ESP32 Pico entries (`pico32`, `RM_pico` and their
+  `_nimble` variants), kept for community testing.
 - BLE hosts: **Bluedroid** (default) and **NimBLE** (`USE_NIMBLE`), sharing the
   same application code behind `#if defined(USE_NIMBLE)`.
 - Reference radio: Radiomaster TX16S MK3 with EdgeTX.
@@ -109,6 +109,8 @@ pio run -e C3SuperMini          # C3 SuperMini, Bluedroid
 pio run -e C3SuperMini_nimble   # C3 SuperMini, NimBLE
 pio run -e ESP32_DEV38P         # ESP32-DEV-38P, Bluedroid
 pio run -e ESP32_DEV38P_nimble  # ESP32-DEV-38P, NimBLE
+pio run -e ESP32S3SuperMini     # ESP32-S3 SuperMini (reference), Bluedroid
+pio run -e ESP32S3SuperMini_nimble  # ESP32-S3 SuperMini (reference), NimBLE
 pio test -e native              # host unit tests (requires gcc)
 ```
 
@@ -120,12 +122,14 @@ pio test -e native              # host unit tests (requires gcc)
 - `.github/workflows/build-firmware.yml` runs the native tests and builds the
   supported targets (`C3SuperMini`, `C3SuperMini_nimble`, `ESP32_DEV38P`,
   `ESP32_DEV38P_nimble`). `.github/workflows/pages.yml` builds those plus the
-  reference Pico environments and publishes the web flasher. Do not add a
-  reference board to `build-firmware.yml` before it has been hardware-validated.
+  reference ESP32-S3 SuperMini and Pico environments and publishes the web
+  flasher. Do not add a reference board to `build-firmware.yml` before it has
+  been hardware-validated.
 - The remaining environments in `platformio.ini` are kept for reference, are
   not built by CI and are not hardware-validated (see `doc/BENCH.md`).
 - The logging console: USB Serial JTAG on the C3 SuperMini (its radio link uses
-  UART0's default GPIO20/21), UART0 on the ESP32-DEV-38P (CP2102 bridge) and
+  UART0's default GPIO20/21) and on the ESP32-S3 SuperMini (radio link on
+  UART0's default GPIO43/44), UART0 on the ESP32-DEV-38P (CP2102 bridge) and
   UART1 on the Radiomaster Pico (its radio link uses UART0).
 
 ### Web flasher (browser flashing)

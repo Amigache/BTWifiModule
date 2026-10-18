@@ -1,0 +1,15 @@
+{
+  "name": "BTWifiModule (ESP32-S3 SuperMini, NimBLE)",
+  "version": "develop",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "firmware/esp32s3supermini/nimble/bootloader.bin", "offset": 0 },
+        { "path": "firmware/esp32s3supermini/nimble/partitions.bin", "offset": 32768 },
+        { "path": "firmware/esp32s3supermini/nimble/firmware.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}
