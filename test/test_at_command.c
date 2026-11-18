@@ -75,6 +75,13 @@ void test_htreset(void)
   TEST_ASSERT_EQUAL(AT_CMD_HTRESET, r.command);
 }
 
+void test_download(void)
+{
+  char line[] = "AT+DOWNLOAD\r\n";
+  at_command_parse_t r = at_command_parse(line);
+  TEST_ASSERT_EQUAL(AT_CMD_DOWNLOAD, r.command);
+}
+
 void test_unknown(void)
 {
   char line[] = "AT+BOGUS\r\n";
@@ -114,6 +121,7 @@ void run_at_command_tests(void)
   RUN_TEST(test_clear);
   RUN_TEST(test_baud_argument);
   RUN_TEST(test_htreset);
+  RUN_TEST(test_download);
   RUN_TEST(test_unknown);
   RUN_TEST(test_trailing_whitespace_stripped);
   RUN_TEST(test_null_input);
