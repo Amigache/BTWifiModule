@@ -1,0 +1,15 @@
+{
+  "name": "BTWifiModule (RadioMaster Wireless Module, Bluedroid)",
+  "version": "develop",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "firmware/rmwireless/bluedroid/bootloader.bin", "offset": 4096 },
+        { "path": "firmware/rmwireless/bluedroid/partitions.bin", "offset": 32768 },
+        { "path": "firmware/rmwireless/bluedroid/firmware.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}

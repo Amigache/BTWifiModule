@@ -32,14 +32,16 @@
   <p class="hint">
     Requires a Chromium-based browser (Chrome/Edge) over HTTPS or
     <code>localhost</code>, and the board connected over USB. Press RESET on the
-    board after flashing (the firmware does not auto-reset).
+    ESP32-C3 SuperMini after flashing (its native USB does not auto-reset); the
+    CP2102 boards reset automatically.
   </p>
 
   <p class="hint">
-    The <strong>ESP32-S3 SuperMini</strong> and <strong>Pico</strong> boards are
-    reference builds kept for community testing: they are not hardware-validated
-    by this project. The Pico boards differ in the radio UART pins — if one does
-    not work, try the other.
+    The <strong>ESP32-S3 SuperMini</strong>, the <strong>Pico</strong> boards and
+    the <strong>RadioMaster Wireless Module</strong> are reference builds kept
+    for community testing: they are not hardware-validated by this project. The
+    Pico boards differ in the radio UART pins — if one does not work, try the
+    other.
   </p>
 
   <div class="row">
@@ -49,6 +51,7 @@
         <option value="esp32dev38p">ESP32-DEV-38P</option>
         <option value="esp32s3supermini">ESP32-S3 SuperMini (reference, untested)</option>
         <option value="rmpico">Radiomaster Pico (reference, untested)</option>
+        <option value="rmwireless">RadioMaster Wireless Module (reference, untested)</option>
         <option value="pico32">ESP32 Pico Kit (reference, untested)</option>
       </select>
     </label>

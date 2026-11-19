@@ -12,8 +12,11 @@ and exposes BLE (GATT service `0xFFF0`, characteristic `0xFFF6`).
 - Primary target: **ESP32-C3 SuperMini** (`PCB_C3SUPERMINI`). **ESP32-DEV-38P**
   (`PCB_WROOM`, environments `ESP32_DEV38P*`) is the second supported board.
 - Reference targets (not hardware-validated): the **ESP32-S3 SuperMini**
-  (`ESP32S3SuperMini*`) and the ESP32 Pico entries (`pico32`, `RM_pico` and their
-  `_nimble` variants), kept for community testing.
+  (`ESP32S3SuperMini*`), the ESP32 Pico entries (`pico32`, `RM_pico` and their
+  `_nimble` variants) and the **RadioMaster Wireless Module** (`RM_Wireless*`),
+  kept for community testing. The Wireless Module's Bluedroid and NimBLE builds
+  have been smoke-tested over USB/BLE (AT bench, advertising, GATT, telemetry,
+  status LED) but not with a radio; see `doc/BENCH.md` before promoting it.
 - BLE hosts: **Bluedroid** (default) and **NimBLE** (`USE_NIMBLE`), sharing the
   same application code behind `#if defined(USE_NIMBLE)`.
 - Reference radio: Radiomaster TX16S MK3 with EdgeTX.
@@ -111,6 +114,8 @@ pio run -e ESP32_DEV38P         # ESP32-DEV-38P, Bluedroid
 pio run -e ESP32_DEV38P_nimble  # ESP32-DEV-38P, NimBLE
 pio run -e ESP32S3SuperMini     # ESP32-S3 SuperMini (reference), Bluedroid
 pio run -e ESP32S3SuperMini_nimble  # ESP32-S3 SuperMini (reference), NimBLE
+pio run -e RM_Wireless          # RadioMaster Wireless Module (reference), Bluedroid
+pio run -e RM_Wireless_nimble   # RadioMaster Wireless Module (reference), NimBLE
 pio test -e native              # host unit tests (requires gcc)
 ```
 

@@ -1,0 +1,7 @@
+# ESP-IDF Partition Table
+# RadioMaster Wireless Module: 8 MB flash (W25Q64JVSIQ).
+# 3 MB application partition; the rest of the flash stays unused.
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x6000,
+phy_init, data, phy,     0xf000,   0x1000,
+factory,  app,  factory, 0x10000,  0x300000,

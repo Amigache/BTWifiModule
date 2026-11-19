@@ -8,8 +8,9 @@
  * physical parameters of the serial link with the radio.
  *
  * Primary target: ESP32-C3 SuperMini (`PCB_C3SUPERMINI`), which connects the
- * radio to UART1 on GPIO20 (RX) / GPIO21 (TX). Reference target: ESP32-S3
- * SuperMini (`PCB_S3SUPERMINI`), which uses UART1 on GPIO43 (TX) / GPIO44 (RX).
+ * radio to UART1 on GPIO20 (RX) / GPIO21 (TX). Reference targets: ESP32-S3
+ * SuperMini (`PCB_S3SUPERMINI`, UART1 on GPIO43/44) and RadioMaster Wireless
+ * Module (`PCB_RM_WIRELESS`, UART0 on GPIO1/3, shared with the USB bridge).
  */
 
 #pragma once
@@ -31,6 +32,20 @@
   #define UART_NUM   UART_NUM_0
   #define UART_RXPIN 3
   #define UART_TXPIN 1
+
+#elif defined(PCB_RM_WIRELESS)
+  // RadioMaster Wireless Module (ESP32-D0WDQ6, 8 MB flash)
+  //   UART0 is shared through a CH442E mux selected by USB VBUS: the radio bay
+  //   when USB is unplugged, the CP2102 bridge when USB is connected.
+  //   GPIO1 = TX (module TX -> radio RX, J4 pin 3)
+  //   GPIO3 = RX (radio TX -> module RX, J4 pin 2)
+  #define UART_NUM   UART_NUM_0
+  #define UART_TXPIN 1
+  #define UART_RXPIN 3
+  // On-board WS2812-compatible status LED (TX1812MJA5-1515), net RGB_ESP32
+  // through R15 (300R).
+  #define HAS_STATUS_LED 1
+  #define STATUS_LED_GPIO 18
 
 #elif defined(PCB_WROOM)
   // Node32s / WROOM-32
@@ -61,7 +76,7 @@
   #define UART_RXPIN 44
 
 #else
-  #error "PCB_NOT_CONFIGURED: define PCB_PICO / PCB_RMPICO / PCB_WROOM / PCB_C3MINI / PCB_C3SUPERMINI / PCB_S3SUPERMINI"
+  #error "PCB_NOT_CONFIGURED: define PCB_PICO / PCB_RMPICO / PCB_RM_WIRELESS / PCB_WROOM / PCB_C3MINI / PCB_C3SUPERMINI / PCB_S3SUPERMINI"
 #endif
 
 /* ------------------------------------------------------------------------- */

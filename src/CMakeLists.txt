@@ -13,6 +13,7 @@ idf_component_register(
         bt_server.c
         cb.c
         settings.c
+        status_led.c
         terminal.c
     INCLUDE_DIRS
         .

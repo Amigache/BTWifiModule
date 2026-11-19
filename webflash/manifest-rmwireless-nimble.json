@@ -1,0 +1,15 @@
+{
+  "name": "BTWifiModule (RadioMaster Wireless Module, NimBLE)",
+  "version": "develop",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "firmware/rmwireless/nimble/bootloader.bin", "offset": 4096 },
+        { "path": "firmware/rmwireless/nimble/partitions.bin", "offset": 32768 },
+        { "path": "firmware/rmwireless/nimble/firmware.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}

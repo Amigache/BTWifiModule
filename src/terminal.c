@@ -27,6 +27,7 @@
 #include "bt_server.h"
 #include "cb.h"
 #include "settings.h"
+#include "status_led.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -40,6 +41,14 @@
 #define AT_CMD_MAX_LEN 40
 /** Peripheral passthrough buffer size (<= minimum ATT MTU payload). */
 #define PASSTHROUGH_BUF 20
+
+/** Window after the last UART byte during which the radio is considered
+ *  present. Telemetry streams continuously, so a short gap means the link is
+ *  gone; AT-only traffic refreshes it in bursts. */
+#define RADIO_LINK_TIMEOUT_US (10LL * 1000 * 1000)
+
+/** Minimum interval between status LED refreshes. */
+#define STATUS_LED_PERIOD_US (100LL * 1000)
 
 /** UART number used to talk to the radio (see board.h). */
 const uart_port_t uart_num = UART_NUM;
@@ -280,9 +289,13 @@ static char atcommand[AT_CMD_MAX_LEN];
 static int atcommandlen = -1;
 static cbuf_t uartinbuf;
 
+/** Timestamp of the last UART byte received from the radio (0 = none yet). */
+static int64_t lastRadioRxUs;
+
 void runUARTHead(void *param)
 {
   (void)param;
+  status_led_init();
   ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
   ESP_ERROR_CHECK(
       uart_driver_install(uart_num, UART_RX_BUFFER * 2, UART_RX_BUFFER * 2, 0, NULL, 0));
@@ -321,6 +334,10 @@ void runUARTHead(void *param)
 
   for (;;) {
     int cnt = uart_read_bytes(uart_num, data, UART_RX_BUFFER, 0);
+    int64_t now = esp_timer_get_time();
+    if (cnt > 0) {
+      lastRadioRxUs = now;
+    }
     for (int i = 0; i < cnt; i++) {
       cbuf_push(&uartinbuf, data[i]);
     }
@@ -368,6 +385,17 @@ void runUARTHead(void *param)
 
     settings_process();
     runBT();
+
+    // Status LED: at most one refresh every 100 ms. The driver only writes to
+    // the LED when the colour changes, so this is cheap.
+    static int64_t lastStatusLedUs;
+    if (now - lastStatusLedUs >= STATUS_LED_PERIOD_US) {
+      lastStatusLedUs = now;
+      bool radio_active =
+          lastRadioRxUs > 0 && (now - lastRadioRxUs) < RADIO_LINK_TIMEOUT_US;
+      status_led_update(radio_active, bt_server_connected || bt_client_connected);
+    }
+
     // Delay one tick (10 ms at CONFIG_FREERTOS_HZ=100). Do NOT use
     // pdMS_TO_TICKS(1) here: it rounds down to 0 ticks (a bare taskYIELD),
     // which starves the idle task and triggers the task watchdog.

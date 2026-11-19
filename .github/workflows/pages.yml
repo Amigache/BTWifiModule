@@ -50,6 +50,7 @@ jobs:
                   -e ESP32_DEV38P -e ESP32_DEV38P_nimble \
                   -e ESP32S3SuperMini -e ESP32S3SuperMini_nimble \
                   -e RM_pico -e RM_pico_nimble \
+                  -e RM_Wireless -e RM_Wireless_nimble \
                   -e pico32 -e pico32_nimble
 
       - name: Assemble web flasher
@@ -69,6 +70,8 @@ jobs:
           place ESP32S3SuperMini_nimble esp32s3supermini nimble
           place RM_pico              rmpico      bluedroid
           place RM_pico_nimble       rmpico      nimble
+          place RM_Wireless          rmwireless  bluedroid
+          place RM_Wireless_nimble   rmwireless  nimble
           place pico32               pico32      bluedroid
           place pico32_nimble        pico32      nimble
 
@@ -77,8 +80,27 @@ jobs:
         with:
           path: webflash
 
+  check-pages:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - name: Check whether GitHub Pages is enabled
+        id: check
+        run: |
+          # The Pages API returns 404 until Pages is enabled on the repository,
+          # so a non-200 answer means there is nowhere to deploy to.
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages")
+          if [ "$code" = "200" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
-    needs: build
+    needs: [build, check-pages]
+    if: needs.check-pages.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

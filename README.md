@@ -63,6 +63,7 @@ from a supply that can handle the ESP32 current peaks.
 | ESP32-S3 SuperMini *(reference)* | UART1 | GPIO43 | GPIO44 | native USB Serial/JTAG |
 | ESP32 Pico Kit *(reference)* | UART2 | GPIO4 | GPIO5 | UART0 (default console) |
 | Radiomaster Pico *(reference)* | UART0 | GPIO1 | GPIO3 | UART1 — GPIO20 (TX) / GPIO19 (RX) |
+| RadioMaster Wireless Module *(reference)* | UART0 | GPIO1 | GPIO3 | USB-C CP2102 (UART0 shared, no log console) |
 
 The pins are selected per environment through the `PCB_*` macro in
 `src/board.h`. On the C3 SuperMini the radio uses UART1 on GPIO20/21 (the
@@ -70,10 +71,16 @@ default UART0 pins), so the log console is routed to the native USB Serial/JTAG
 port instead of UART0; the ESP32-S3 SuperMini uses the same approach with the
 default UART0 pins on GPIO43/44. On the ESP32-DEV-38P the on-board CP2102
 bridge keeps UART0 free for flashing and logs. On the Radiomaster Pico the radio
-link uses UART0, so the log console is moved to UART1.
+link uses UART0, so the log console is moved to UART1. On the RadioMaster
+Wireless Module a CH442E mux selected by USB VBUS connects UART0 either to the
+radio bay or to the CP2102, leaving no pin for a log console: that target is
+built silent to keep the AT link clean. Its on-board WS2812 LED (GPIO18) shows
+the link state: red = idle, green = radio traffic, blue = BLE peer connected,
+cyan = both.
 
-The reference rows are the non-validated targets (see
-[Validated targets](#validated-targets)).
+The reference rows are the community builds (see
+[Validated targets](#validated-targets)); the Wireless Module has only been
+validated over USB/BLE so far, not against a radio.
 
 ## EdgeTX protocol
 
@@ -123,7 +130,8 @@ NimBLE.
 
 **Reference targets** (not hardware-validated). The ESP32-S3 SuperMini uses the
 default 1 MB app partition; the Pico boards use 1.31 MB via
-`pico_partitions.csv`:
+`pico_partitions.csv`; the Wireless Module uses 3 MB via
+`rm_wireless_partitions.csv`:
 
 | Environment | BLE host | Flash | Board |
 |---|---|---|---|
@@ -133,12 +141,21 @@ default 1 MB app partition; the Pico boards use 1.31 MB via
 | `RM_pico_nimble` | NimBLE | ~41 % | Radiomaster Pico |
 | `pico32` | Bluedroid | ~65 % | ESP32 Pico Kit |
 | `pico32_nimble` | NimBLE | ~41 % | ESP32 Pico Kit |
+| `RM_Wireless` | Bluedroid | ~24 % | RadioMaster Wireless Module |
+| `RM_Wireless_nimble` | NimBLE | ~17 % | RadioMaster Wireless Module |
+
+The Wireless Module rows are the same application code, and both builds have
+been checked end to end over USB/BLE: advertising, service `0xFFF0` /
+characteristic `0xFFF6`, S.Port telemetry decoded by the phone app and the
+on-board status LED. The radio bay and the central/headtracker runs are still
+untested, so it stays in this table.
 
 ```bash
 pio run -e C3SuperMini -t upload          # C3 SuperMini, Bluedroid
 pio run -e C3SuperMini_nimble -t upload   # C3 SuperMini, NimBLE
 pio run -e ESP32S3SuperMini -t upload     # ESP32-S3 SuperMini, Bluedroid
 pio run -e RM_pico -t upload              # Radiomaster Pico, Bluedroid
+pio run -e RM_Wireless -t upload          # RadioMaster Wireless Module, Bluedroid
 ```
 
 The Bluedroid path is kept behind `#if !defined(USE_NIMBLE)`, so both hosts
@@ -154,10 +171,11 @@ through GitHub Pages. Open the Pages URL in a Chromium-based browser
 
 - Boards: **ESP32-C3 SuperMini** (`C3SuperMini*`) and **ESP32-DEV-38P**
   (`ESP32_DEV38P*`).
-- Reference builds (not hardware-validated): **ESP32-S3 SuperMini**
-  (`ESP32S3SuperMini*`), **Radiomaster Pico** (`RM_pico*`) and **ESP32 Pico Kit**
-  (`pico32*`). They differ in the radio UART pins, so if one does not work, try
-  the other.
+- Reference builds: **ESP32-S3 SuperMini** (`ESP32S3SuperMini*`), **Radiomaster
+  Pico** (`RM_pico*`), **RadioMaster Wireless Module** (`RM_Wireless*`, same
+  UART0 pins as the Radiomaster Pico; its BLE side is validated over USB, the
+  radio bay is not) and **ESP32 Pico Kit** (`pico32*`). They differ in the radio
+  UART pins, so if one does not work, try the other.
 - Hosts: **Bluedroid** (default) and **NimBLE**.
 
 Every board is offered with both hosts (each combination is a separate build).
@@ -180,11 +198,22 @@ Hardware validation status of the current firmware. The bench procedure is in
 `n/t` = not tested (the ESP32-DEV-38P was validated against the phone and the
 headtracker, without a board-to-board master run).
 
+Partial validation (BLE path over USB, no radio yet):
+
+| Target | BLE host | AT commands | Slave + telemetry | Master | Headtracker |
+|---|---|---|---|---|---|
+| RadioMaster Wireless Module | Bluedroid | PASS | PASS | n/t | n/t |
+| RadioMaster Wireless Module | NimBLE | PASS | PASS | n/t | n/t |
+
+Both hosts pass the full `tools/at_bench.py` (16 checks) and the phone checks
+described in `doc/BENCH.md`; the radio bay (`J4`), central mode and the
+headtracker are not tested yet.
+
 The other board environments in `platformio.ini` (ESP32 Pico, ESP32-S3
 SuperMini, C3 DevKitM-1, Node32s Wroom32, Radiomaster Pico) are kept for
 reference and are not hardware-validated with this version. The ESP32-S3
-SuperMini and the two Pico boards are additionally built by the web flasher
-workflow so they can be tried from the browser.
+SuperMini, the two Pico boards and the Wireless Module are additionally built by
+the web flasher workflow so they can be tried from the browser.
 
 ## Tests
 
