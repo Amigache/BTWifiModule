@@ -239,6 +239,11 @@ module:
 | `AT+CON<addr>` | connect to a device (central) |
 | `AT+CLEAR` | forget the saved device |
 | `AT+HTRESET` | reset the headtracker (BTWifiModule extension) |
+| `AT+DOWNLOAD` | reboot into the ROM serial bootloader for flashing (BTWifiModule extension) |
+
+`AT+DOWNLOAD` is only available on the RISC-V targets (ESP32-C3, ESP32-S3): it
+uses the `RTC_CNTL_OPTION1_REG` force-download-boot flag, which the original
+ESP32 (Xtensa) does not have. On the ESP32 targets it responds `ERROR`.
 
 Responses: `OK+...`, `Central:<addr>`, `Peripheral:<addr>`, `Connected:<addr>`,
 `DisConnected`, `ERROR`.

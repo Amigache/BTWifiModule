@@ -30,8 +30,20 @@
 #include "status_led.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_system.h"
+#include "soc/rtc_cntl_reg.h"
+#include "soc/soc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
+// AT+DOWNLOAD (force download boot) relies on RTC_CNTL_OPTION1_REG /
+// RTC_CNTL_FORCE_DOWNLOAD_BOOT, which only exist on the RISC-V chips. The
+// original ESP32 (Xtensa) has no such register, so the command is unavailable
+// there.
+#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3) || \
+    defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C2)
+#define HAS_FORCE_DOWNLOAD_BOOT 1
+#endif
 
 #define LOG_UART "UART"
 
@@ -157,6 +169,21 @@ static void sendPeripheralConnected(void)
 /* AT command parsing / dispatch                                              */
 /* ========================================================================== */
 
+#ifdef HAS_FORCE_DOWNLOAD_BOOT
+/**
+ * @brief Reboot into the ROM serial bootloader (download mode).
+ *
+ * Sets the force-download flag in the RTC domain and soft-resets the chip.
+ * The ROM bootloader then starts on UART0 and speaks the esptool SLIP
+ * protocol, so a host can reflash the module without touching GPIO9/EN.
+ */
+static void reboot_into_download(void)
+{
+  REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
+  esp_restart();
+}
+#endif
+
 /**
  * @brief Execute an AT command and respond according to the EdgeTX contract.
  *
@@ -264,6 +291,20 @@ static void parserATCommand(char *line)
         write_str("ERROR");
       }
       break;
+
+#ifdef HAS_FORCE_DOWNLOAD_BOOT
+    case AT_CMD_DOWNLOAD:
+      ESP_LOGI(LOG_UART, "Rebooting into ROM download mode");
+      write_str("OK+DOWNLOAD\r\n");
+      uart_wait_tx_done(uart_num, pdMS_TO_TICKS(200));
+      reboot_into_download();
+      break;
+#else
+    case AT_CMD_DOWNLOAD:
+      // No RTC force-download register on this chip (ESP32 original).
+      write_str("ERROR\r\n");
+      break;
+#endif
 
     case AT_CMD_UNKNOWN:
     default:

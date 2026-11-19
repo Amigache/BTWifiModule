@@ -59,6 +59,9 @@ at_command_parse_t at_command_parse(char *line)
   } else if (strncmp(p, "+HTRESET", 8) == 0) {
     result.command = AT_CMD_HTRESET;
     result.argument = "";
+  } else if (strncmp(p, "+DOWNLOAD", 9) == 0) {
+    result.command = AT_CMD_DOWNLOAD;
+    result.argument = "";
   }
 
   return result;
