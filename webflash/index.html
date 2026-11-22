@@ -156,7 +156,7 @@
         <span class="field-label">Connection</span>
         <div class="segmented" id="modeSeg">
           <button type="button" class="seg-btn active" data-mode="direct">Direct USB</button>
-          <button type="button" class="seg-btn" data-mode="passthrough">Through radio</button>
+          <button type="button" class="seg-btn" data-mode="passthrough">EdgeTX Passthrough</button>
         </div>
       </div>
 
@@ -186,7 +186,8 @@
 
       <div id="passthrough" hidden>
         <div class="note">
-          Flashes the module through the radio&rsquo;s USB port. Requirements:
+          Flashes the module through EdgeTX Passthrough (the radio&rsquo;s USB
+          port). Requirements:
           <ul>
             <li>Radio in USB <strong>Serial (VCP)</strong> mode, EdgeTX firmware built
                 with <code>CLI=ON</code> + <code>BLUETOOTH=ON</code>.</li>
@@ -200,7 +201,7 @@
           Wireless Module) lack the <code>AT+DOWNLOAD</code> command and are disabled
           in the <em>Board</em> list above.
         </div>
-        <button class="primary" id="flashRadio" type="button">Flash through radio</button>
+        <button class="primary" id="flashRadio" type="button">Flash via EdgeTX Passthrough</button>
         <pre class="log" id="log"></pre>
       </div>
     </section>
@@ -285,7 +286,7 @@
         const { fileArray, chipFamily } = await loadFirmware();
 
         const proceed = window.confirm(
-          "Flash the Bluetooth module through the radio?\n\n" +
+          "Flash the Bluetooth module via EdgeTX Passthrough?\n\n" +
           `Firmware: ${chipFamily} (${board.value}/${host.value})\n` +
           "This erases and rewrites the module's flash. Do not disconnect the " +
           "radio while flashing is in progress."
