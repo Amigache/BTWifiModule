@@ -268,11 +268,15 @@
     }
 
     async function loadFirmware() {
-      const manifest = await (await fetch(manifestPath())).json();
+      // cache: no-store — avoid serving a stale cached .bin (the browser caches
+      // the firmware and would flash an old build).
+      const manifest = await (await fetch(manifestPath(), { cache: "no-store" })).json();
       const build = manifest.builds[0];
       const fileArray = [];
       for (const part of build.parts) {
-        const data = new Uint8Array(await (await fetch(part.path)).arrayBuffer());
+        const data = new Uint8Array(
+          await (await fetch(part.path, { cache: "no-store" })).arrayBuffer()
+        );
         fileArray.push({ data, address: part.offset });
       }
       return { fileArray, chipFamily: build.chipFamily };
@@ -282,6 +286,7 @@
       clearLog();
       flashRadio.disabled = true;
       let port = null;
+      let transport = null;
       try {
         // Request the port first: it needs the click's user gesture, which
         // fetching the firmware (below) could otherwise outlive.
@@ -314,11 +319,17 @@
         }
         await sleep(2000); // radio echoes + brings the bridge up
 
-        log("Sending AT+DOWNLOAD to enter the ROM bootloader...");
-        {
-          const writer = port.writable.getWriter();
-          await writer.write(encoder.encode("AT+DOWNLOAD\r\n"));
-          writer.releaseLock();
+        // Send AT+DOWNLOAD twice (with a gap) to be robust against the module
+        // still booting when the first one arrives. If the first one already
+        // rebooted it, the second just hits the ROM bootloader (harmless).
+        for (let i = 0; i < 2; i++) {
+          log(`Sending AT+DOWNLOAD to enter the ROM bootloader... (${i + 1}/2)`);
+          {
+            const writer = port.writable.getWriter();
+            await writer.write(encoder.encode("AT+DOWNLOAD\r\n"));
+            writer.releaseLock();
+          }
+          await sleep(800);
         }
         await sleep(1500); // module reboots into the ROM bootloader
 
@@ -327,7 +338,7 @@
         // Loaded lazily so the page (and Direct USB mode) don't depend on the CDN.
         const { ESPLoader, Transport } =
           await import("https://unpkg.com/esptool-js@0.7.1/bundle.js");
-        const transport = new Transport(port, false);
+        transport = new Transport(port, false);
         transport.connect = async (baud) => { transport.baudrate = baud; };
 
         const loader = new ESPLoader({
@@ -358,6 +369,11 @@
         }
         log(`Chip verified: ${loader.chip.CHIP_NAME}`);
 
+        // esptool-js does not apply the chip's flash write block size in ROM
+        // mode; the ESP32-C3 ROM expects 1 KB blocks (0x400), not the 16 KB
+        // default, otherwise flash_begin is rejected.
+        loader.FLASH_WRITE_SIZE = loader.chip.FLASH_WRITE_SIZE;
+
         let lastLoggedPct = -1;
         await loader.writeFlash({
           fileArray,
@@ -365,7 +381,7 @@
           flashMode: "keep",
           flashFreq: "keep",
           eraseAll: false,
-          compress: false,
+          compress: true,
           reportProgress: (fileIndex, written, total) => {
             const pct = total ? Math.floor((100 * written) / total) : 100;
             if (written === 0) lastLoggedPct = -1;
@@ -377,16 +393,18 @@
         });
 
         // ROM mode: writeFlash() skips the final flash_end, so send it
-        // explicitly. The ROM replies with 0x06 ("stay in bootloader"), which
-        // is expected and harmless — the radio power-cycles the module on hangup.
+        // explicitly. With compression, use flashDeflFinish. The ROM replies
+        // with 0x06 ("stay in bootloader"), which is expected and harmless —
+        // the radio power-cycles the module on hangup.
         try {
-          await loader.flashFinish(false);
+          await loader.flashDeflFinish(false);
         } catch (e) {
           log(`Note: ${e.message || e}`);
         }
 
         log("Flash complete. Closing the port...");
-        await port.close();
+        await transport.disconnect();
+        transport = null;
         port = null;
         log("Done. The radio power-cycles the module to run the new firmware.");
       } catch (e) {
@@ -399,7 +417,11 @@
         // Always release the port: closing it drops DTR, which makes EdgeTX end
         // the passthrough and power-cycle the module (so a failed flash still
         // leaves the module in a defined state rather than stuck in passthrough).
-        if (port) {
+        // The transport's readLoop holds the readable stream lock, so close via
+        // transport.disconnect() (cancels the reader) instead of port.close().
+        if (transport) {
+          try { await transport.disconnect(); } catch (e) {}
+        } else if (port) {
           try { await port.close(); } catch (e) {}
         }
         flashRadio.disabled = false;
