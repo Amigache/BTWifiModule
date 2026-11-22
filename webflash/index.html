@@ -93,6 +93,7 @@
       color: var(--text);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
     }
+    .seg-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
     esp-web-install-button { display: block; margin-top: 0.25rem; }
 
@@ -259,6 +260,15 @@
         board.value = 'c3supermini';
         install.setAttribute('manifest', manifestPath());
       }
+
+      // Conversely, disable the EdgeTX Passthrough option when the selected
+      // board cannot enter the ROM bootloader over the radio (original ESP32).
+      const selectedChip = board.options[board.selectedIndex].dataset.chip;
+      const passthroughBtn = modeSeg.querySelector('.seg-btn[data-mode="passthrough"]');
+      passthroughBtn.disabled = selectedChip === 'esp32';
+      passthroughBtn.title = selectedChip === 'esp32'
+        ? 'Not available for the original ESP32 (no AT+DOWNLOAD)'
+        : '';
     }
 
     async function loadFirmware() {
@@ -390,7 +400,7 @@
 
     modeSeg.addEventListener('click', (e) => {
       const btn = e.target.closest('.seg-btn');
-      if (!btn) return;
+      if (!btn || btn.disabled) return;
       mode = btn.dataset.mode;
       modeSeg.querySelectorAll('.seg-btn').forEach(b =>
         b.classList.toggle('active', b === btn));
