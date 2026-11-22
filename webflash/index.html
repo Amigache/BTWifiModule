@@ -23,6 +23,24 @@
     esp-web-install-button { margin-top: 0.5rem; }
     code { background: #8882; padding: 0.1em 0.3em; border-radius: 4px; }
     .hint { font-size: 0.9rem; opacity: 0.8; }
+    button#flashRadio {
+      margin: 0.5rem 0;
+      padding: 0.6rem 1rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button#flashRadio:disabled { opacity: 0.5; cursor: default; }
+    pre.log {
+      background: #8882;
+      border-radius: 6px;
+      padding: 0.75rem;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 3rem;
+      max-height: 16rem;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -45,14 +63,20 @@
   </p>
 
   <div class="row">
+    <label>Connection
+      <select id="mode">
+        <option value="direct">Direct USB</option>
+        <option value="passthrough">Through radio (EdgeTX passthrough)</option>
+      </select>
+    </label>
     <label>Board
       <select id="board">
-        <option value="c3supermini">ESP32-C3 SuperMini (primary)</option>
-        <option value="esp32dev38p">ESP32-DEV-38P</option>
-        <option value="esp32s3supermini">ESP32-S3 SuperMini (reference, untested)</option>
-        <option value="rmpico">Radiomaster Pico (reference, untested)</option>
-        <option value="rmwireless">RadioMaster Wireless Module (reference, untested)</option>
-        <option value="pico32">ESP32 Pico Kit (reference, untested)</option>
+        <option value="c3supermini" data-chip="c3">ESP32-C3 SuperMini (primary)</option>
+        <option value="esp32dev38p" data-chip="esp32">ESP32-DEV-38P</option>
+        <option value="esp32s3supermini" data-chip="s3">ESP32-S3 SuperMini (reference, untested)</option>
+        <option value="rmpico" data-chip="esp32">Radiomaster Pico (reference, untested)</option>
+        <option value="rmwireless" data-chip="esp32">RadioMaster Wireless Module (reference, untested)</option>
+        <option value="pico32" data-chip="esp32">ESP32 Pico Kit (reference, untested)</option>
       </select>
     </label>
     <label>Bluetooth host
@@ -66,23 +90,208 @@
   <esp-web-install-button id="install"
                           manifest="manifest-c3supermini-bluedroid.json"></esp-web-install-button>
 
+  <div id="passthrough" hidden>
+    <p class="hint">
+      Flashes the module through the radio's USB port (EdgeTX serial
+      passthrough). Requirements:
+    </p>
+    <ul class="hint">
+      <li>The radio is in USB <strong>Serial (VCP)</strong> mode and its EdgeTX
+          firmware is built with <code>CLI=ON</code> + <code>BLUETOOTH=ON</code>.</li>
+      <li>The module is plugged into the radio's Bluetooth connector and is
+          <strong>running</strong> a BTWifiModule firmware that supports
+          <code>AT+DOWNLOAD</code> (ESP32-C3 / S3 only).</li>
+      <li>Do not disconnect the radio or close the tab while flashing is in
+          progress.</li>
+    </ul>
+    <p class="hint">
+      If the flash fails and the module no longer boots, recover it by plugging
+      it into the PC over USB (or holding BOOT + pressing RESET) and flashing
+      directly with the <em>Direct USB</em> mode above.
+    </p>
+    <button id="flashRadio" type="button">Flash through radio</button>
+    <pre class="log" id="log"></pre>
+  </div>
+
   <p class="hint" id="info"></p>
 
-  <script>
+  <script type="module">
     const board = document.getElementById('board');
     const host = document.getElementById('host');
+    const mode = document.getElementById('mode');
     const install = document.getElementById('install');
+    const passthrough = document.getElementById('passthrough');
+    const flashRadio = document.getElementById('flashRadio');
+    const logEl = document.getElementById('log');
     const info = document.getElementById('info');
 
+    const PASSTHROUGH_BAUD = 115200;
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    function manifestPath() {
+      return `manifest-${board.value}-${host.value}.json`;
+    }
+
+    function log(msg, withNewline = true) {
+      logEl.textContent += msg + (withNewline ? "\n" : "");
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function clearLog() { logEl.textContent = ""; }
+
     function update() {
-      install.setAttribute('manifest', `manifest-${board.value}-${host.value}.json`);
+      install.setAttribute('manifest', manifestPath());
       info.textContent =
         `Selected: ${board.options[board.selectedIndex].text} — ` +
         `${host.options[host.selectedIndex].text}`;
+
+      const isPassthrough = mode.value === 'passthrough';
+      install.hidden = isPassthrough;
+      passthrough.hidden = !isPassthrough;
+
+      // AT+DOWNLOAD only exists on the RISC-V chips (C3/S3); disable ESP32-original
+      // boards in passthrough mode.
+      for (const opt of board.options) {
+        opt.disabled = isPassthrough && opt.dataset.chip === 'esp32';
+      }
+      if (isPassthrough && board.options[board.selectedIndex].disabled) {
+        board.value = 'c3supermini';
+        install.setAttribute('manifest', manifestPath());
+      }
+    }
+
+    async function loadFirmware() {
+      const manifest = await (await fetch(manifestPath())).json();
+      const build = manifest.builds[0];
+      const fileArray = [];
+      for (const part of build.parts) {
+        const data = new Uint8Array(await (await fetch(part.path)).arrayBuffer());
+        fileArray.push({ data, address: part.offset });
+      }
+      return { fileArray, chipFamily: build.chipFamily };
+    }
+
+    async function flashThroughRadio() {
+      clearLog();
+      flashRadio.disabled = true;
+      let port = null;
+      try {
+        // Request the port first: it needs the click's user gesture, which
+        // fetching the firmware (below) could otherwise outlive.
+        log("Select the radio's serial (VCP) port in the browser prompt...");
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: PASSTHROUGH_BAUD });
+
+        const { fileArray, chipFamily } = await loadFirmware();
+
+        const proceed = window.confirm(
+          "Flash the Bluetooth module through the radio?\n\n" +
+          `Firmware: ${chipFamily} (${board.value}/${host.value})\n` +
+          "This erases and rewrites the module's flash. Do not disconnect the " +
+          "radio while flashing is in progress."
+        );
+        if (!proceed) {
+          log("Aborted.");
+          await port.close();
+          return;
+        }
+
+        const encoder = new TextEncoder();
+
+        const cmd = `serialpassthrough bt ${PASSTHROUGH_BAUD} hangup`;
+        log(`Starting passthrough: '${cmd}'`);
+        {
+          const writer = port.writable.getWriter();
+          await writer.write(encoder.encode(cmd + "\n"));
+          writer.releaseLock();
+        }
+        await sleep(2000); // radio echoes + brings the bridge up
+
+        log("Sending AT+DOWNLOAD to enter the ROM bootloader...");
+        {
+          const writer = port.writable.getWriter();
+          await writer.write(encoder.encode("AT+DOWNLOAD\r\n"));
+          writer.releaseLock();
+        }
+        await sleep(1500); // module reboots into the ROM bootloader
+
+        // The port is already open and the module is in download mode. esptool-js's
+        // Transport.connect() would try to re-open it, so patch it to be a no-op.
+        // Loaded lazily so the page (and Direct USB mode) don't depend on the CDN.
+        const { ESPLoader, Transport } =
+          await import("https://unpkg.com/esptool-js@0.7.1/bundle.js");
+        const transport = new Transport(port, false);
+        transport.connect = async (baud) => { transport.baudrate = baud; };
+
+        const loader = new ESPLoader({
+          transport,
+          baudrate: PASSTHROUGH_BAUD,
+          terminal: {
+            clean: () => {},
+            writeLine: (s) => log(s),
+            write: (s) => log(s, false),
+          },
+        });
+
+        log("Connecting to the module (ROM download mode)...");
+        await loader.main("no_reset");
+
+        // Safety: refuse to flash firmware built for a different chip than the
+        // one actually detected (a mismatch would corrupt the bootloader).
+        const detected = String(loader.chip && loader.chip.CHIP_NAME || "").toUpperCase();
+        const expected = String(chipFamily || "").toUpperCase();
+        if (expected && detected && detected !== expected) {
+          throw new Error(
+            `Chip mismatch: firmware is for ${chipFamily}, but the module reports ` +
+            `${loader.chip.CHIP_NAME}. Aborting.`
+          );
+        }
+        log(`Chip verified: ${loader.chip.CHIP_NAME}`);
+
+        let lastLoggedPct = -1;
+        await loader.writeFlash({
+          fileArray,
+          flashSize: "keep",
+          flashMode: "keep",
+          flashFreq: "keep",
+          eraseAll: false,
+          compress: true,
+          reportProgress: (fileIndex, written, total) => {
+            const pct = total ? Math.floor((100 * written) / total) : 100;
+            if (written === 0) lastLoggedPct = -1;
+            if (pct >= lastLoggedPct + 10 || pct === 100) {
+              lastLoggedPct = pct;
+              log(`  file ${fileIndex + 1}/${fileArray.length}: ${pct}%`);
+            }
+          },
+        });
+
+        log("Flash complete. Closing the port...");
+        await port.close();
+        port = null;
+        log("Done. The radio power-cycles the module to run the new firmware.");
+      } catch (e) {
+        log(`Error: ${e.message || e}`);
+        log("Hints: is the radio in USB Serial (VCP) mode? Does its EdgeTX " +
+            "firmware have CLI=ON and BLUETOOTH=ON? Does the module support " +
+            "AT+DOWNLOAD? If the module no longer boots, recover it over USB " +
+            "(or BOOT + RESET).");
+      } finally {
+        // Always release the port: closing it drops DTR, which makes EdgeTX end
+        // the passthrough and power-cycle the module (so a failed flash still
+        // leaves the module in a defined state rather than stuck in passthrough).
+        if (port) {
+          try { await port.close(); } catch (e) {}
+        }
+        flashRadio.disabled = false;
+      }
     }
 
     board.addEventListener('change', update);
     host.addEventListener('change', update);
+    mode.addEventListener('change', update);
+    flashRadio.addEventListener('click', flashThroughRadio);
     update();
   </script>
 </body>
