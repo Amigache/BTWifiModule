@@ -341,7 +341,10 @@
         });
 
         log("Connecting to the module (ROM download mode)...");
-        await loader.main("no_reset");
+        // Flash in ROM mode (no stub): the stub upload (large RAM blocks) does
+        // not survive the byte-by-byte passthrough bridge. The ROM flash path
+        // (same as tools/bt_flash.py) is reliable at 115200 baud.
+        await loader.detectChip("no_reset");
 
         // Safety: refuse to flash firmware built for a different chip than the
         // one actually detected (a mismatch would corrupt the bootloader).
@@ -362,7 +365,7 @@
           flashMode: "keep",
           flashFreq: "keep",
           eraseAll: false,
-          compress: true,
+          compress: false,
           reportProgress: (fileIndex, written, total) => {
             const pct = total ? Math.floor((100 * written) / total) : 100;
             if (written === 0) lastLoggedPct = -1;
@@ -372,6 +375,15 @@
             }
           },
         });
+
+        // ROM mode: writeFlash() skips the final flash_end, so send it
+        // explicitly. The ROM replies with 0x06 ("stay in bootloader"), which
+        // is expected and harmless — the radio power-cycles the module on hangup.
+        try {
+          await loader.flashFinish(false);
+        } catch (e) {
+          log(`Note: ${e.message || e}`);
+        }
 
         log("Flash complete. Closing the port...");
         await port.close();
