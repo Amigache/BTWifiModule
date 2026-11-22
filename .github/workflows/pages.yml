@@ -90,10 +90,13 @@ jobs:
         run: |
           # The Pages API returns 404 until Pages is enabled on the repository,
           # so a non-200 answer means there is nowhere to deploy to.
-          # Use `gh api` (authenticated with GITHUB_TOKEN) instead of a bare
-          # curl: unauthenticated requests from the shared runner IP get
-          # rate-limited (403), which wrongly reported Pages as disabled.
-          if gh api "repos/$GITHUB_REPOSITORY/pages" >/dev/null 2>&1; then
+          # Authenticate with GITHUB_TOKEN: unauthenticated requests from the
+          # shared runner IP get rate-limited (403).
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages")
+          echo "Pages API HTTP status: $code"
+          if [ "$code" = "200" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
