@@ -7,125 +7,225 @@
   <script type="module"
           src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
   <style>
-    :root { color-scheme: light dark; }
-    body {
-      font-family: system-ui, sans-serif;
-      max-width: 640px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      line-height: 1.5;
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #0e7490;
+      --primary-hover: #155e75;
+      --log-bg: #111827;
+      --log-fg: #d1d5db;
     }
-    h1 { margin-bottom: 0.25rem; }
-    .sub { opacity: 0.7; margin-top: 0; }
-    .row { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
-    label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.95rem; }
-    select { padding: 0.4rem; font-size: 1rem; }
-    esp-web-install-button { margin-top: 0.5rem; }
-    code { background: #8882; padding: 0.1em 0.3em; border-radius: 4px; }
-    .hint { font-size: 0.9rem; opacity: 0.8; }
-    button#flashRadio {
-      margin: 0.5rem 0;
-      padding: 0.6rem 1rem;
-      font-size: 1rem;
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   "Helvetica Neue", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 2.5rem 1rem 3rem;
+    }
+    header { margin-bottom: 1.5rem; }
+    h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.6rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .sub { margin: 0; color: var(--muted); font-size: 0.95rem; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.5rem;
+    }
+
+    .field { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1.25rem; }
+    .field:last-child { margin-bottom: 0; }
+    .field-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .field-row .field { flex: 1 1 200px; }
+    .field-label {
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    select {
+      padding: 0.5rem 0.6rem;
+      font-size: 0.95rem;
+      color: var(--text);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    select:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+    .segmented {
+      display: inline-flex;
+      background: #eceff1;
+      border-radius: 6px;
+      padding: 3px;
+      gap: 3px;
+      align-self: flex-start;
+    }
+    .seg-btn {
+      border: none;
+      background: transparent;
+      color: #4b5563;
+      padding: 0.45rem 0.9rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
       cursor: pointer;
     }
-    button#flashRadio:disabled { opacity: 0.5; cursor: default; }
-    pre.log {
-      background: #8882;
-      border-radius: 6px;
-      padding: 0.75rem;
+    .seg-btn.active {
+      background: var(--card);
+      color: var(--text);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+
+    esp-web-install-button { display: block; margin-top: 0.25rem; }
+
+    .note {
       font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0.25rem 0 0;
+    }
+    .note ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+    .note li { margin-bottom: 0.3rem; }
+    .note code {
+      background: #eceff1;
+      padding: 0.05rem 0.3rem;
+      border-radius: 3px;
+      font-size: 0.82rem;
+    }
+
+    button.primary {
+      margin-top: 1rem;
+      padding: 0.6rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #fff;
+      background: var(--primary);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button.primary:hover { background: var(--primary-hover); }
+    button.primary:disabled { opacity: 0.55; cursor: default; }
+
+    pre.log {
+      margin: 1rem 0 0;
+      padding: 0.75rem 0.9rem;
+      background: var(--log-bg);
+      color: var(--log-fg);
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.8rem;
+      line-height: 1.5;
       white-space: pre-wrap;
       word-break: break-word;
       min-height: 3rem;
-      max-height: 16rem;
+      max-height: 18rem;
       overflow-y: auto;
     }
+
+    footer { margin-top: 1.25rem; }
+    footer .note { font-size: 0.82rem; }
   </style>
 </head>
 <body>
-  <h1>BTWifiModule</h1>
-  <p class="sub">FrSky Bluetooth emulator for the ESP32.</p>
+  <div class="container">
+    <header>
+      <h1>BTWifiModule</h1>
+      <p class="sub">FrSky Bluetooth emulator for the ESP32 &mdash; web flasher</p>
+    </header>
 
-  <p class="hint">
-    Requires a Chromium-based browser (Chrome/Edge) over HTTPS or
-    <code>localhost</code>, and the board connected over USB. Press RESET on the
-    ESP32-C3 SuperMini after flashing (its native USB does not auto-reset); the
-    CP2102 boards reset automatically.
-  </p>
+    <section class="card">
+      <div class="field">
+        <span class="field-label">Connection</span>
+        <div class="segmented" id="modeSeg">
+          <button type="button" class="seg-btn active" data-mode="direct">Direct USB</button>
+          <button type="button" class="seg-btn" data-mode="passthrough">Through radio</button>
+        </div>
+      </div>
 
-  <p class="hint">
-    The <strong>ESP32-S3 SuperMini</strong>, the <strong>Pico</strong> boards and
-    the <strong>RadioMaster Wireless Module</strong> are reference builds kept
-    for community testing: they are not hardware-validated by this project. The
-    Pico boards differ in the radio UART pins — if one does not work, try the
-    other.
-  </p>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label" for="board">Board</label>
+          <select id="board">
+            <option value="c3supermini" data-chip="c3">ESP32-C3 SuperMini (primary)</option>
+            <option value="esp32dev38p" data-chip="esp32">ESP32-DEV-38P</option>
+            <option value="esp32s3supermini" data-chip="s3">ESP32-S3 SuperMini (reference)</option>
+            <option value="rmpico" data-chip="esp32">Radiomaster Pico (reference)</option>
+            <option value="rmwireless" data-chip="esp32">RadioMaster Wireless Module (reference)</option>
+            <option value="pico32" data-chip="esp32">ESP32 Pico Kit (reference)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="host">Bluetooth host</label>
+          <select id="host">
+            <option value="bluedroid">Bluedroid (default)</option>
+            <option value="nimble">NimBLE</option>
+          </select>
+        </div>
+      </div>
 
-  <div class="row">
-    <label>Connection
-      <select id="mode">
-        <option value="direct">Direct USB</option>
-        <option value="passthrough">Through radio (EdgeTX passthrough)</option>
-      </select>
-    </label>
-    <label>Board
-      <select id="board">
-        <option value="c3supermini" data-chip="c3">ESP32-C3 SuperMini (primary)</option>
-        <option value="esp32dev38p" data-chip="esp32">ESP32-DEV-38P</option>
-        <option value="esp32s3supermini" data-chip="s3">ESP32-S3 SuperMini (reference, untested)</option>
-        <option value="rmpico" data-chip="esp32">Radiomaster Pico (reference, untested)</option>
-        <option value="rmwireless" data-chip="esp32">RadioMaster Wireless Module (reference, untested)</option>
-        <option value="pico32" data-chip="esp32">ESP32 Pico Kit (reference, untested)</option>
-      </select>
-    </label>
-    <label>Bluetooth host
-      <select id="host">
-        <option value="bluedroid">Bluedroid (default)</option>
-        <option value="nimble">NimBLE</option>
-      </select>
-    </label>
+      <esp-web-install-button id="install"
+                              manifest="manifest-c3supermini-bluedroid.json"></esp-web-install-button>
+
+      <div id="passthrough" hidden>
+        <div class="note">
+          Flashes the module through the radio&rsquo;s USB port. Requirements:
+          <ul>
+            <li>Radio in USB <strong>Serial (VCP)</strong> mode, EdgeTX firmware built
+                with <code>CLI=ON</code> + <code>BLUETOOTH=ON</code>.</li>
+            <li>Module plugged into the radio&rsquo;s Bluetooth connector and
+                <strong>running</strong> a BTWifiModule firmware with
+                <code>AT+DOWNLOAD</code>.</li>
+            <li>Do not disconnect the radio or close this tab while flashing.</li>
+          </ul>
+          Only <strong>ESP32-C3</strong> and <strong>ESP32-S3</strong> modules can be
+          flashed this way. The original ESP32 boards (DEV-38P, Pico, RadioMaster
+          Wireless Module) lack the <code>AT+DOWNLOAD</code> command and are disabled
+          in the <em>Board</em> list above.
+        </div>
+        <button class="primary" id="flashRadio" type="button">Flash through radio</button>
+        <pre class="log" id="log"></pre>
+      </div>
+    </section>
+
+    <footer>
+      <p class="note">
+        Reference boards (S3 SuperMini, Pico, RadioMaster Wireless Module) are
+        kept for community testing and are not hardware-validated. If a flash
+        fails and the module no longer boots, recover it over USB (or BOOT +
+        RESET) using the <em>Direct USB</em> mode.
+      </p>
+    </footer>
   </div>
-
-  <esp-web-install-button id="install"
-                          manifest="manifest-c3supermini-bluedroid.json"></esp-web-install-button>
-
-  <div id="passthrough" hidden>
-    <p class="hint">
-      Flashes the module through the radio's USB port (EdgeTX serial
-      passthrough). Requirements:
-    </p>
-    <ul class="hint">
-      <li>The radio is in USB <strong>Serial (VCP)</strong> mode and its EdgeTX
-          firmware is built with <code>CLI=ON</code> + <code>BLUETOOTH=ON</code>.</li>
-      <li>The module is plugged into the radio's Bluetooth connector and is
-          <strong>running</strong> a BTWifiModule firmware that supports
-          <code>AT+DOWNLOAD</code> (ESP32-C3 / S3 only).</li>
-      <li>Do not disconnect the radio or close the tab while flashing is in
-          progress.</li>
-    </ul>
-    <p class="hint">
-      If the flash fails and the module no longer boots, recover it by plugging
-      it into the PC over USB (or holding BOOT + pressing RESET) and flashing
-      directly with the <em>Direct USB</em> mode above.
-    </p>
-    <button id="flashRadio" type="button">Flash through radio</button>
-    <pre class="log" id="log"></pre>
-  </div>
-
-  <p class="hint" id="info"></p>
 
   <script type="module">
     const board = document.getElementById('board');
     const host = document.getElementById('host');
-    const mode = document.getElementById('mode');
+    const modeSeg = document.getElementById('modeSeg');
     const install = document.getElementById('install');
     const passthrough = document.getElementById('passthrough');
     const flashRadio = document.getElementById('flashRadio');
     const logEl = document.getElementById('log');
-    const info = document.getElementById('info');
 
     const PASSTHROUGH_BAUD = 115200;
+    let mode = 'direct';
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -142,12 +242,11 @@
 
     function update() {
       install.setAttribute('manifest', manifestPath());
-      info.textContent =
-        `Selected: ${board.options[board.selectedIndex].text} — ` +
-        `${host.options[host.selectedIndex].text}`;
 
-      const isPassthrough = mode.value === 'passthrough';
-      install.hidden = isPassthrough;
+      const isPassthrough = mode === 'passthrough';
+      // The esp-web-install-button custom element ignores the `hidden` attribute
+      // (its :host { display:block } wins), so hide it via inline style.
+      install.style.display = isPassthrough ? 'none' : '';
       passthrough.hidden = !isPassthrough;
 
       // AT+DOWNLOAD only exists on the RISC-V chips (C3/S3); disable ESP32-original
@@ -288,9 +387,17 @@
       }
     }
 
+    modeSeg.addEventListener('click', (e) => {
+      const btn = e.target.closest('.seg-btn');
+      if (!btn) return;
+      mode = btn.dataset.mode;
+      modeSeg.querySelectorAll('.seg-btn').forEach(b =>
+        b.classList.toggle('active', b === btn));
+      update();
+    });
+
     board.addEventListener('change', update);
     host.addEventListener('change', update);
-    mode.addEventListener('change', update);
     flashRadio.addEventListener('click', flashThroughRadio);
     update();
   </script>
