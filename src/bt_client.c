@@ -16,6 +16,7 @@
 #include "board.h"
 #include "settings.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
@@ -175,11 +176,26 @@ static bool scanned_find_type(const bt_addr_t addr, uint8_t *type_out)
 typedef struct {
   uint8_t data[BT_CLIENT_QUEUE_PAYLOAD];
   uint8_t len;
+  uint32_t received_us;  //< micros timestamp when the frame was enqueued
 } bt_notify_packet_t;
 
 static QueueHandle_t s_notify_queue = NULL;
-/* Diagnostic counter (single writer in the BT task, read for STATUS). */
-static volatile uint32_t s_notify_superseded = 0;
+
+/* Diagnostic counters. The BT task writes the notification/queue ones and the
+ * UART task writes the UART/latency ones; all are single-writer and only read
+ * for the STATUS dump, so torn reads are acceptable. */
+static volatile uint32_t s_notifications = 0;
+static volatile uint32_t s_malformed = 0;
+static volatile uint32_t s_superseded = 0;
+static volatile uint32_t s_max_queue_depth = 0;
+static volatile uint32_t s_last_notify_us = 0;
+static volatile uint32_t s_max_gap_ms = 0;
+static volatile uint32_t s_gaps_over_100_ms = 0;
+static volatile uint32_t s_uart_packets = 0;
+static volatile uint32_t s_uart_bytes = 0;
+static volatile uint32_t s_uart_write_max_us = 0;
+static volatile uint32_t s_max_rx_to_uart_us = 0;
+static uint64_t s_total_rx_to_uart_us = 0;
 
 static void notify_queue_init(void)
 {
@@ -191,13 +207,29 @@ static void notify_queue_init(void)
 
 void bt_client_notify_push(const uint8_t *data, size_t len)
 {
+  uint32_t now_us = (uint32_t)esp_timer_get_time();
+
+  // Track the gap between notifications (for every notification).
+  if (s_last_notify_us != 0) {
+    uint32_t gap_ms = (now_us - s_last_notify_us) / 1000;
+    if (gap_ms > s_max_gap_ms) {
+      s_max_gap_ms = gap_ms;
+    }
+    if (gap_ms > 100) {
+      ++s_gaps_over_100_ms;
+    }
+  }
+  s_last_notify_us = now_us;
+
   if (s_notify_queue == NULL || data == NULL || len == 0 ||
       len > BT_CLIENT_QUEUE_PAYLOAD) {
+    ++s_malformed;
     return;
   }
 
   bt_notify_packet_t pkt;
   pkt.len = (uint8_t)len;
+  pkt.received_us = now_us;
   memcpy(pkt.data, data, len);
 
   if (xQueueSend(s_notify_queue, &pkt, 0) != pdTRUE) {
@@ -205,8 +237,14 @@ void bt_client_notify_push(const uint8_t *data, size_t len)
     // so a BLE burst cannot pile up behind the UART.
     bt_notify_packet_t oldest;
     xQueueReceive(s_notify_queue, &oldest, 0);
-    ++s_notify_superseded;
+    ++s_superseded;
     xQueueSend(s_notify_queue, &pkt, 0);
+  }
+  ++s_notifications;
+
+  uint32_t depth = (uint32_t)uxQueueMessagesWaiting(s_notify_queue);
+  if (depth > s_max_queue_depth) {
+    s_max_queue_depth = depth;
   }
 }
 
@@ -223,14 +261,42 @@ bool bt_client_notify_pop(uint8_t *data, size_t cap, size_t *len)
   if (cap < pkt.len) {
     return false;
   }
+
+  // BLE -> UART latency: from the enqueue timestamp to now.
+  uint32_t age_us = (uint32_t)esp_timer_get_time() - pkt.received_us;
+  if (age_us > s_max_rx_to_uart_us) {
+    s_max_rx_to_uart_us = age_us;
+  }
+  s_total_rx_to_uart_us += age_us;
+
   memcpy(data, pkt.data, pkt.len);
   *len = pkt.len;
   return true;
 }
 
-uint32_t bt_client_notify_superseded(void)
+void bt_client_diag_record_write(uint32_t bytes, uint32_t write_us)
 {
-  return s_notify_superseded;
+  ++s_uart_packets;
+  s_uart_bytes += bytes;
+  if (write_us > s_uart_write_max_us) {
+    s_uart_write_max_us = write_us;
+  }
+}
+
+void bt_client_diag_get(bt_client_diag_t *d)
+{
+  d->notifications = s_notifications;
+  d->malformed = s_malformed;
+  d->superseded = s_superseded;
+  d->max_queue_depth = s_max_queue_depth;
+  d->uart_packets = s_uart_packets;
+  d->uart_bytes = s_uart_bytes;
+  d->uart_write_max_us = s_uart_write_max_us;
+  d->max_rx_to_uart_us = s_max_rx_to_uart_us;
+  d->avg_rx_to_uart_us =
+      s_uart_packets ? (uint32_t)(s_total_rx_to_uart_us / s_uart_packets) : 0;
+  d->max_gap_ms = s_max_gap_ms;
+  d->gaps_over_100_ms = s_gaps_over_100_ms;
 }
 
 /* ========================================================================== */

@@ -106,24 +106,6 @@ void bt_client_abort_connect(void);
 /** Send the reset command to the headtracker (if connected to one). */
 void bt_client_dohtreset(void);
 
-/* --- Runtime diagnostics --------------------------------------------------- */
-
-/** Runtime counters for the central (trainer master) data path. */
-typedef struct {
-  uint32_t notifications;      //< framed notifications forwarded
-  uint32_t malformed;          //< notifications dropped (empty or unframed)
-  uint32_t uart_packets;       //< frames written to the UART
-  uint32_t uart_bytes;         //< bytes written to the UART
-  uint32_t uart_write_max_us;  //< max UART write duration (us)
-  uint32_t max_rx_to_uart_us;  //< max BLE -> UART latency (us)
-  uint32_t avg_rx_to_uart_us;  //< average BLE -> UART latency (us)
-  uint32_t max_gap_ms;         //< max gap between notifications (ms)
-  uint32_t gaps_over_100_ms;   //< notification gaps over 100 ms
-} bt_client_diag_t;
-
-/** Snapshot the runtime counters into `d` (torn reads are acceptable). */
-void bt_client_diag_get(bt_client_diag_t *d);
-
 /* --- Thread-safe access to the scanned-device list ------------------------ */
 
 /** @return number of devices kept from the last scan. */
@@ -164,5 +146,33 @@ void bt_client_notify_push(const uint8_t *data, size_t len);
  */
 bool bt_client_notify_pop(uint8_t *data, size_t cap, size_t *len);
 
-/** @return number of frames evicted because the queue was full. */
-uint32_t bt_client_notify_superseded(void);
+/* --- Runtime diagnostics --------------------------------------------------- */
+
+/** Runtime counters for the central (trainer master) data path. */
+typedef struct {
+  uint32_t notifications;      //< trainer notifications enqueued
+  uint32_t malformed;          //< notifications rejected (null/oversized)
+  uint32_t superseded;         //< frames evicted from a full queue
+  uint32_t max_queue_depth;    //< max frames ever queued
+  uint32_t uart_packets;       //< frames written to the UART
+  uint32_t uart_bytes;         //< bytes written to the UART
+  uint32_t uart_write_max_us;  //< max UART write duration (us)
+  uint32_t max_rx_to_uart_us;  //< max BLE -> UART latency (us)
+  uint32_t avg_rx_to_uart_us;  //< average BLE -> UART latency (us)
+  uint32_t max_gap_ms;         //< max gap between notifications (ms)
+  uint32_t gaps_over_100_ms;   //< notification gaps over 100 ms
+} bt_client_diag_t;
+
+/** Snapshot the runtime counters into `d`. */
+void bt_client_diag_get(bt_client_diag_t *d);
+
+/**
+ * @brief Record one UART write for the notification queue.
+ *
+ * Called from the UART task after each queued frame is written, to feed the
+ * `uart_*` and `*_rx_to_uart_*` counters.
+ *
+ * @param bytes     number of bytes written.
+ * @param write_us  duration of the write in microseconds.
+ */
+void bt_client_diag_record_write(uint32_t bytes, uint32_t write_us);

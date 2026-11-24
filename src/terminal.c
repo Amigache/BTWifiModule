@@ -329,12 +329,14 @@ static void parserATCommand(char *line)
       // Project extension: dump the runtime counters of the central data path.
       bt_client_diag_t d;
       bt_client_diag_get(&d);
-      write_fmt("OK+STATUS rx=%lu malformed=%lu uartPkts=%lu uartBytes=%lu "
-                "wrMaxUs=%lu rxToUartMaxUs=%lu rxToUartAvgUs=%lu gapMaxMs=%lu "
-                "gaps100=%lu\r\n",
+      write_fmt("OK+STATUS rx=%lu malformed=%lu superseded=%lu qd=%lu "
+                "uartPkts=%lu uartBytes=%lu wrMaxUs=%lu rxToUartMaxUs=%lu "
+                "rxToUartAvgUs=%lu gapMaxMs=%lu gaps100=%lu\r\n",
                 (unsigned long)d.notifications, (unsigned long)d.malformed,
+                (unsigned long)d.superseded, (unsigned long)d.max_queue_depth,
                 (unsigned long)d.uart_packets, (unsigned long)d.uart_bytes,
-                (unsigned long)d.uart_write_max_us, (unsigned long)d.max_rx_to_uart_us,
+                (unsigned long)d.uart_write_max_us,
+                (unsigned long)d.max_rx_to_uart_us,
                 (unsigned long)d.avg_rx_to_uart_us, (unsigned long)d.max_gap_ms,
                 (unsigned long)d.gaps_over_100_ms);
       // parserATCommand() paused the trainer passthrough; this command does not
@@ -470,7 +472,10 @@ void runUARTHead(void *param)
     uint8_t notifyBuf[BT_CLIENT_QUEUE_PAYLOAD];
     size_t notifyLen = 0;
     while (bt_client_notify_pop(notifyBuf, sizeof(notifyBuf), &notifyLen)) {
+      uint32_t t0 = (uint32_t)esp_timer_get_time();
       uart_write_bytes(uart_num, notifyBuf, notifyLen);
+      bt_client_diag_record_write((uint32_t)notifyLen,
+                                  (uint32_t)esp_timer_get_time() - t0);
     }
 
     // Status LED: at most one refresh every 100 ms. The driver only writes to
