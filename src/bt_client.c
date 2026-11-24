@@ -500,6 +500,8 @@ static void bt_on_sync(void)
   esp_bd_addr_t own;
   ble_hs_id_copy_addr(s_own_addr_type, own, NULL);
   bt_addr_reverse(own, localbtaddress);
+  // Prefer 2M PHY for the trainer link (shorter air time per frame).
+  ble_gap_set_prefered_default_le_phy(BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_2M_MASK);
   s_readytoscan = true;
 }
 
@@ -711,11 +713,13 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
         ESP_LOGE(GATTC_TAG, "config MTU error, error code = %x", mtu_ret);
       }
 #if defined(BLUETOOTH5)
-      esp_ble_gap_set_preferred_phy(param->connect.remote_bda,
-                                    ESP_BLE_GAP_NO_PREFER_TRANSMIT_PHY |
-                                        ESP_BLE_GAP_NO_PREFER_RECEIVE_PHY,
-                                    ESP_BLE_GAP_PHY_CODED_PREF_MASK, ESP_BLE_GAP_PHY_CODED_PREF_MASK,
-                                    ESP_BLE_GAP_PHY_OPTIONS_PREF_S8_CODING);
+      // Request a 2M PHY for the trainer link (shorter air time per frame).
+      // all_phys_mask must be 0 so the tx/rx masks actually apply; a non-zero
+      // NO_PREFER bit masks them out and leaves the link on the default 1M.
+      esp_ble_gap_set_preferred_phy(param->connect.remote_bda, 0,
+                                    ESP_BLE_GAP_PHY_2M_PREF_MASK,
+                                    ESP_BLE_GAP_PHY_2M_PREF_MASK,
+                                    ESP_BLE_GAP_PHY_OPTIONS_NO_PREF);
 #endif
       bt_client_scan_complete = false;
       gattc_update_connection_params(&param->connect.remote_bda);
