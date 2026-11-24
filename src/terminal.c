@@ -28,6 +28,7 @@
 #include "cb.h"
 #include "settings.h"
 #include "status_led.h"
+#include "trainer_frame.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_system.h"
@@ -113,6 +114,187 @@ static int laddcnt = 0;
 
 static void runBT(void);
 static void setRole(role_t role);
+
+/* ========================================================================== */
+/* Peripheral passthrough (UART -> BLE telemetry/trainer)                     */
+/* ========================================================================== */
+
+/** Peripheral passthrough buffer (<= minimum ATT MTU payload). */
+static uint8_t passBuf[PASSTHROUGH_BUF];
+static uint8_t passLen = 0;
+
+/** Flush the passthrough buffer to the BLE central. */
+static void peri_flush(void)
+{
+  if (passLen > 0) {
+    bt_server_send_data(passBuf, passLen);
+    passLen = 0;
+  }
+}
+
+/** Buffer one telemetry byte for forwarding (flushes on a full buffer). */
+static void peri_forward_byte(uint8_t c)
+{
+  passBuf[passLen++] = c;
+  if (passLen >= sizeof(passBuf)) {
+    peri_flush();
+  }
+}
+
+#if defined(BT_CRSF_VIEWER_COMPAT)
+/* TelemetryViewer (Android 1.9.x) only accepts the CRSF RADIO_ADDRESS 0xEA,
+ * while EdgeTX emits valid telemetry with the standard sync 0xC8. Convert only
+ * the address byte of complete, CRC-validated CRSF frames. */
+static uint8_t crsf_pending[64];
+static uint8_t crsf_count = 0;
+
+static uint8_t crsf_crc8(const uint8_t *data, size_t count)
+{
+  uint8_t crc = 0;
+  for (size_t i = 0; i < count; i++) {
+    crc ^= data[i];
+    for (uint8_t bit = 0; bit < 8; bit++) {
+      crc = (crc & 0x80) ? (uint8_t)((crc << 1) ^ 0xD5) : (uint8_t)(crc << 1);
+    }
+  }
+  return crc;
+}
+
+static void crsf_flush_pending(void)
+{
+  for (uint8_t i = 0; i < crsf_count; i++) {
+    peri_forward_byte(crsf_pending[i]);
+  }
+  crsf_count = 0;
+}
+
+static void crsf_input_byte(uint8_t c)
+{
+  if (crsf_count == 0) {
+    if (c != 0xC8) {
+      peri_forward_byte(c);
+      return;
+    }
+    crsf_pending[crsf_count++] = c;  // buffer the 0xC8 sync byte
+    return;
+  }
+  crsf_pending[crsf_count++] = c;
+  if (crsf_count == 2 && (c < 2 || c > 62)) {
+    crsf_flush_pending();  // invalid frame length; pass through unchanged
+    return;
+  }
+  if (crsf_count >= 2 && crsf_count == (uint8_t)(crsf_pending[1] + 2)) {
+    // Complete frame: validate the CRC over type+payload (address excluded).
+    bool valid = crsf_crc8(&crsf_pending[2], crsf_count - 3) == crsf_pending[crsf_count - 1];
+    if (valid) {
+      crsf_pending[0] = 0xEA;  // 0xC8 -> 0xEA for TelemetryViewer
+    }
+    crsf_flush_pending();
+  }
+}
+#endif
+
+#if defined(BT_ROLE0_AUTODETECT)
+/* EdgeTX uses the same AT+ROLE0 for Bluetooth Trainer Slave and Telemetry; the
+ * module cannot tell them apart from the handshake. Probe the first UART
+ * traffic: a validated FrSky trainer frame (0x7E/0x80/12 bytes/XOR) selects
+ * Trainer, anything else selects Telemetry. */
+typedef enum {
+  ROLE0_UNDECIDED = 0,
+  ROLE0_TELEMETRY,
+  ROLE0_TRAINER,
+} role0_protocol_t;
+
+static role0_protocol_t s_role0_protocol = ROLE0_UNDECIDED;
+static trainer_frame_parser_t s_role0_parser;
+static uint8_t s_role0_probe[TRAINER_FRAME_WIRE_CAPACITY];
+static size_t s_role0_probe_len = 0;
+static int64_t s_role0_probe_since = 0;
+
+static void role0_forward(uint8_t c)
+{
+#if defined(BT_CRSF_VIEWER_COMPAT)
+  crsf_input_byte(c);
+#else
+  peri_forward_byte(c);
+#endif
+}
+
+static void role0_input_byte(uint8_t c)
+{
+  if (s_role0_protocol == ROLE0_TELEMETRY) {
+    role0_forward(c);
+    return;
+  }
+
+  if (s_role0_protocol == ROLE0_TRAINER) {
+    trainer_frame_result_t r = trainer_frame_feed(&s_role0_parser, c);
+    if (r == TRAINER_FRAME_VALID) {
+      // Forward only validated trainer frames, whole and in wire order.
+      bt_server_send_data(s_role0_parser.wire, s_role0_parser.wire_len);
+      trainer_frame_reset(&s_role0_parser);
+    }
+    return;
+  }
+
+  // ROLE0_UNDECIDED: probe the first traffic.
+  if (s_role0_probe_len == 0 && c != TRAINER_FRAME_START_STOP) {
+    // First byte is not a frame delimiter (CRSF / raw) -> telemetry.
+    s_role0_protocol = ROLE0_TELEMETRY;
+    ESP_LOGI(LOG_UART, "ROLE0 protocol: telemetry");
+    role0_forward(c);
+    return;
+  }
+
+  if (s_role0_probe_len == 0) {
+    s_role0_probe_since = esp_timer_get_time();
+  }
+  if (s_role0_probe_len < sizeof(s_role0_probe)) {
+    s_role0_probe[s_role0_probe_len++] = c;
+  }
+
+  trainer_frame_result_t r = trainer_frame_feed(&s_role0_parser, c);
+  if (r == TRAINER_FRAME_VALID) {
+    s_role0_protocol = ROLE0_TRAINER;
+    ESP_LOGI(LOG_UART, "ROLE0 protocol: trainer");
+    bt_server_send_data(s_role0_parser.wire, s_role0_parser.wire_len);
+    trainer_frame_reset(&s_role0_parser);
+    s_role0_probe_len = 0;
+  } else if (r == TRAINER_FRAME_INVALID || s_role0_probe_len == sizeof(s_role0_probe)) {
+    // Not a trainer frame (S.Port) -> telemetry; replay the probe bytes.
+    s_role0_protocol = ROLE0_TELEMETRY;
+    ESP_LOGI(LOG_UART, "ROLE0 protocol: telemetry");
+    for (size_t i = 0; i < s_role0_probe_len; i++) {
+      role0_forward(s_role0_probe[i]);
+    }
+    s_role0_probe_len = 0;
+    trainer_frame_reset(&s_role0_parser);
+  }
+}
+
+static void role0_poll_probe(void)
+{
+  if (s_role0_protocol == ROLE0_UNDECIDED && s_role0_probe_len > 0 &&
+      (esp_timer_get_time() - s_role0_probe_since) > 50000) {
+    // Incomplete probe for 50 ms: treat as telemetry (S.Port).
+    s_role0_protocol = ROLE0_TELEMETRY;
+    ESP_LOGI(LOG_UART, "ROLE0 protocol: telemetry (probe timeout)");
+    for (size_t i = 0; i < s_role0_probe_len; i++) {
+      role0_forward(s_role0_probe[i]);
+    }
+    s_role0_probe_len = 0;
+    trainer_frame_reset(&s_role0_parser);
+  }
+}
+
+static void role0_reset(void)
+{
+  s_role0_protocol = ROLE0_UNDECIDED;
+  trainer_frame_reset(&s_role0_parser);
+  s_role0_probe_len = 0;
+  s_role0_probe_since = 0;
+}
+#endif
 
 /* ========================================================================== */
 /* UART output helpers                                                        */
@@ -217,6 +399,9 @@ static void parserATCommand(char *line)
       ESP_LOGI(LOG_UART, "Setting role as Peripheral");
       write_str("OK+Role:0\r\n");
       setRole(ROLE_BLE_PERIPHERAL);
+#if defined(BT_ROLE0_AUTODETECT)
+      role0_reset();
+#endif
       sendBTMode();
       break;
 
@@ -410,10 +595,6 @@ void runUARTHead(void *param)
     }
   }
 
-  // Peripheral passthrough buffer (<= minimum ATT MTU payload).
-  static uint8_t passBuf[PASSTHROUGH_BUF];
-  static uint8_t passLen = 0;
-
   for (;;) {
     int cnt = uart_read_bytes(uart_num, data, UART_RX_BUFFER, 0);
     int64_t now = esp_timer_get_time();
@@ -447,12 +628,12 @@ void runUARTHead(void *param)
           atcommandlen = 0;
           atcommand[atcommandlen++] = '+';
         } else if (curMode == ROLE_BLE_PERIPHERAL) {
+#if defined(BT_ROLE0_AUTODETECT)
+          role0_input_byte(c);
+#else
           // Forward the radio's telemetry/trainer traffic unchanged.
-          passBuf[passLen++] = c;
-          if (passLen >= sizeof(passBuf)) {
-            bt_server_send_data(passBuf, passLen);
-            passLen = 0;
-          }
+          peri_forward_byte(c);
+#endif
         }
         // In central/master the radio only sends AT commands; discard the rest.
         lc2 = lc1;
@@ -460,10 +641,10 @@ void runUARTHead(void *param)
       }
     }
 
-    if (passLen > 0) {
-      bt_server_send_data(passBuf, passLen);
-      passLen = 0;
-    }
+#if defined(BT_ROLE0_AUTODETECT)
+    role0_poll_probe();
+#endif
+    peri_flush();
 
     settings_process();
     runBT();

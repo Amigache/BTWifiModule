@@ -15,6 +15,7 @@ idf_component_register(
         settings.c
         status_led.c
         terminal.c
+        trainer_frame.c
     INCLUDE_DIRS
         .
 )
