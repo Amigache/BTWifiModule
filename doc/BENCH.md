@@ -61,6 +61,13 @@ If the board does not reset cleanly, power-cycle it and use the manual
    Keep the connection for at least 2 minutes.
 4. Central mode (`AT+ROLE1`): `AT+DISC?` lists advertising peers, `AT+CON`
    connects to the selected peer.
+5. Diagnostics (`AT+STATUS`): with the headtracker connected in central mode,
+   send `AT+STATUS`; expect `OK+STATUS rx=...` with `rxToUartAvgUs` in the tens
+   of microseconds and no `superseded`/`malformed` frames.
+6. ROLE0 auto-detection (peripheral): `AT+ROLE0`, inject a FrSky trainer frame
+   (`0x7E 0x80 … 0x7E`) and check the log reports `ROLE0 protocol: trainer`;
+   re-issue `AT+ROLE0` and inject S.Port or CRSF bytes to see
+   `ROLE0 protocol: telemetry`.
 
 ## AT command bench (automated)
 
@@ -175,6 +182,7 @@ Both BLE hosts validated with two modules (A under test, B as peripheral peer):
 | Master: data path (peer -> local UART)  | PASS      | PASS   |
 | Headtracker: detect + channels + reset  | PASS      | PASS   |
 | Diagnostics (`AT+STATUS`)               | PASS      | PASS   |
+| ROLE0 trainer/telemetry auto-detection  | PASS      | PASS   |
 | Cross-host interop (Bluedroid <-> NimBLE) | PASS    | PASS   |
 
 ESP32-DEV-38P (`ESP32_DEV38P*`), single board against the phone and the
@@ -209,6 +217,20 @@ stock 2.40, EdgeTX stock 2.12.5 for the link tests and the
 The `Connected:` flood and the zeroed override-channel notifications were the
 cause of the "trainer signal lost/recovered" loop; the BLE link never dropped
 (measured on the FTDI tap while the radio was complaining).
+
+### Connection interval
+
+The firmware requests a 2M PHY and a 7.5 ms connection interval:
+
+| BLE host | Measured interval | Why |
+|---|---|---|
+| NimBLE   | 7.5 ms | set in the connect request, accepted by the controller |
+| Bluedroid | 25 ms | the ESP32-C3 controller rejects the post-connect interval update (`HCI_ERR_ILLEGAL_PARAMETER_FMT`) |
+
+Confirm with the headtracker in central mode: the log prints
+`conn interval=6 units (7.50 ms)` on NimBLE, or `update conn params … conn=20`
+(25 ms) on Bluedroid. `AT+STATUS` additionally reports the BLE→UART latency
+(`rxToUartAvgUs`, tens of microseconds after the queue wake optimization).
 
 ## Automated battery
 

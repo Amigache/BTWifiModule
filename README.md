@@ -20,6 +20,15 @@ Documentation: https://btwifimod.gitbook.io/
 | Auto-connect to the last known device | Supported |
 | Device name from `AT+NAME` (persisted and advertised) | Supported |
 | Selectable BLE host: Bluedroid or NimBLE | Supported |
+| Low-latency BLE link (2M PHY, 7.5 ms interval) | Supported |
+| Trainer/telemetry auto-detection on `AT+ROLE0` | Supported |
+| CRSF TelemetryViewer compat (`0xC8`→`0xEA`) | Supported |
+| Runtime diagnostics (`AT+STATUS`) | Supported |
+
+The module requests a 2M PHY and a 7.5 ms connection interval. NimBLE applies
+the interval at connect time and reaches 7.5 ms; Bluedroid can only request it
+post-connect, which the ESP32-C3 controller rejects, so Bluedroid keeps the
+25 ms connect-time interval (see `doc/BENCH.md`).
 
 ## How telemetry works
 
@@ -31,6 +40,10 @@ link. The module passes those bytes to the connected BLE central unchanged:
 
 The client app auto-detects the protocol, so both work over the same GATT
 service (`0xFFF0`, characteristic `0xFFF6`, NOTIFY).
+
+EdgeTX uses the same `AT+ROLE0` for Trainer **Slave** and for Telemetry; the
+firmware tells them apart from the first frame (a validated FrSky trainer
+frame selects Trainer, anything else selects Telemetry).
 
 - S.Port: **INAV / Telemetry Viewer**.
 - CRSF: the maintained fork by **RomanLut**
@@ -105,6 +118,7 @@ src/
   bt_server.c/h   GATT peripheral (service 0xFFF0).
   bt_client.c/h   GATT central (scan, connect, auto-connect).
   terminal.c/h    UART link: AT commands and state machines.
+  trainer_frame.c/h  Pure FrSky trainer frame parser (host-testable).
 test/             Unit tests (Unity).
 tools/            Bench tooling: sport_sender.py (S.Port injector),
                   at_bench.py (AT bench) and battery.py (two-board tests).
@@ -223,7 +237,8 @@ the web flasher workflow so they can be tried from the browser.
 
 ## Tests
 
-The pure modules (`cb`, `at_command`, `bt_addr`) have unit tests under `test/`:
+The pure modules (`cb`, `at_command`, `bt_addr`, `trainer_frame`) have unit
+tests under `test/`:
 
 ```bash
 pio test -e native
@@ -247,6 +262,7 @@ module:
 | `AT+HTRESET` | reset the headtracker (BTWifiModule extension) |
 | `AT+STATUS` | dump the central data-path counters (BTWifiModule extension) |
 | `AT+DOWNLOAD` | reboot into the ROM serial bootloader for flashing (BTWifiModule extension) |
+| `AT+STATUS` | dump runtime diagnostics (BTWifiModule extension) |
 
 `AT+DOWNLOAD` is only available on the RISC-V targets (ESP32-C3, ESP32-S3): it
 uses the `RTC_CNTL_OPTION1_REG` force-download-boot flag, which the original
