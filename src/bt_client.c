@@ -445,6 +445,11 @@ static int bt_gap_event(struct ble_gap_event *event, void *arg)
         s_cccd_handle = 0;
         bt_client_board_type = BLE_BOARD_UNKNOWN;
         ESP_LOGI(GATTC_TAG, "connected handle=%d", s_conn_handle);
+        struct ble_gap_conn_desc desc;
+        if (ble_gap_conn_find(s_conn_handle, &desc) == 0) {
+          ESP_LOGI(GATTC_TAG, "conn interval=%d units (%.2f ms)", desc.conn_itvl,
+                   desc.conn_itvl * 1.25f);
+        }
         ble_gattc_disc_all_svcs(s_conn_handle, on_disc_svc, NULL);
       } else {
         bt_client_connected = false;
@@ -712,17 +717,7 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
       if (mtu_ret) {
         ESP_LOGE(GATTC_TAG, "config MTU error, error code = %x", mtu_ret);
       }
-#if defined(BLUETOOTH5)
-      // Request a 2M PHY for the trainer link (shorter air time per frame).
-      // all_phys_mask must be 0 so the tx/rx masks actually apply; a non-zero
-      // NO_PREFER bit masks them out and leaves the link on the default 1M.
-      esp_ble_gap_set_preferred_phy(param->connect.remote_bda, 0,
-                                    ESP_BLE_GAP_PHY_2M_PREF_MASK,
-                                    ESP_BLE_GAP_PHY_2M_PREF_MASK,
-                                    ESP_BLE_GAP_PHY_OPTIONS_NO_PREF);
-#endif
       bt_client_scan_complete = false;
-      gattc_update_connection_params(&param->connect.remote_bda);
       break;
     }
 
@@ -733,6 +728,19 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
       // the connection.
       ESP_LOGI(GATTC_TAG, "MTU configured %d (status %d), starting service scan",
                param->cfg_mtu.mtu, param->cfg_mtu.status);
+      // Tune the link once the connection has settled. Deferred from
+      // CONNECT_EVT, where esp_ble_gap_update_conn_params is rejected with
+      // ESP_BT_STATUS_ERR_ILLEGAL_PARAMETER_FMT.
+#if defined(BLUETOOTH5)
+      // Request a 2M PHY for the trainer link (shorter air time per frame).
+      // all_phys_mask must be 0 so the tx/rx masks actually apply; a non-zero
+      // NO_PREFER bit masks them out and leaves the link on the default 1M.
+      esp_ble_gap_set_preferred_phy(gl_profile_tab[PROFILE_A_APP_ID].remote_bda, 0,
+                                    ESP_BLE_GAP_PHY_2M_PREF_MASK,
+                                    ESP_BLE_GAP_PHY_2M_PREF_MASK,
+                                    ESP_BLE_GAP_PHY_OPTIONS_NO_PREF);
+#endif
+      gattc_update_connection_params(&gl_profile_tab[PROFILE_A_APP_ID].remote_bda);
       esp_ble_gattc_search_service(gattc_if, param->cfg_mtu.conn_id, &remote_filter_service_uuid);
       break;
 

@@ -24,8 +24,11 @@
 #define BT_PAUSE_BEFORE_RESTART 250
 
 /** BLE connection parameters (interval x1.25ms, timeout x10ms).
- *  A 6-unit interval = 7.5 ms, matching the low-latency headtracker link
- *  (the HeadTracker peripheral also requests 6). */
+ *  6 units = 7.5 ms, the low-latency trainer interval. NimBLE applies this at
+ *  connect time (ble_gap_connect); Bluedroid can only request it post-connect
+ *  via esp_ble_gap_update_conn_params, which the ESP32-C3 controller rejects
+ *  (HCI_ERR_ILLEGAL_PARAMETER_FMT), so the link keeps its connect-time default
+ *  there regardless of this value. */
 #define BT_CON_INT_MIN 6
 #define BT_CON_INT_MAX 6
 #define BT_CON_TIMEOUT 70
