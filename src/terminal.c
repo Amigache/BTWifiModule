@@ -464,6 +464,15 @@ void runUARTHead(void *param)
     settings_process();
     runBT();
 
+    // Drain the bounded BLE -> UART notification queue (central mode). The BT
+    // callback enqueues trainer frames and the UART task writes them here, so
+    // the BT controller task never blocks on UART I/O.
+    uint8_t notifyBuf[BT_CLIENT_QUEUE_PAYLOAD];
+    size_t notifyLen = 0;
+    while (bt_client_notify_pop(notifyBuf, sizeof(notifyBuf), &notifyLen)) {
+      uart_write_bytes(uart_num, notifyBuf, notifyLen);
+    }
+
     // Status LED: at most one refresh every 100 ms. The driver only writes to
     // the LED when the colour changes, so this is cheap.
     static int64_t lastStatusLedUs;

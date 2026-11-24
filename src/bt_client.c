@@ -16,8 +16,8 @@
 #include "board.h"
 #include "settings.h"
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/semphr.h"
 
 #if !defined(USE_NIMBLE)
@@ -168,82 +168,69 @@ static bool scanned_find_type(const bt_addr_t addr, uint8_t *type_out)
 }
 
 /* ========================================================================== */
-/* Runtime diagnostics                                                       */
+/* Bounded BLE -> UART notification queue                                     */
 /* ========================================================================== */
 
-/* The BLE task is the only writer of these counters and the UART task only
- * reads them for the STATUS dump, so torn reads are acceptable. */
-static volatile uint32_t s_notifications;
-static volatile uint32_t s_malformed;
-static volatile uint32_t s_uart_packets;
-static volatile uint32_t s_uart_bytes;
-static volatile uint32_t s_uart_write_max_us;
-static volatile uint32_t s_max_rx_to_uart_us;
-static uint64_t s_total_rx_to_uart_us;
-static volatile uint32_t s_last_notify_us;
-static volatile uint32_t s_max_gap_ms;
-static volatile uint32_t s_gaps_over_100_ms;
+/** A single queued trainer frame. */
+typedef struct {
+  uint8_t data[BT_CLIENT_QUEUE_PAYLOAD];
+  uint8_t len;
+} bt_notify_packet_t;
 
-/**
- * @brief Account one notification received from the trainer.
- *
- * @param received_us  timestamp taken when the notification arrived.
- * @param usable       true when it carries a frame that will be forwarded.
- */
-static void diag_note_notify(uint32_t received_us, bool usable)
+static QueueHandle_t s_notify_queue = NULL;
+/* Diagnostic counter (single writer in the BT task, read for STATUS). */
+static volatile uint32_t s_notify_superseded = 0;
+
+static void notify_queue_init(void)
 {
-  if (s_last_notify_us != 0) {
-    uint32_t gap_ms = (received_us - s_last_notify_us) / 1000;
-    if (gap_ms > s_max_gap_ms) {
-      s_max_gap_ms = gap_ms;
-    }
-    if (gap_ms > 100) {
-      ++s_gaps_over_100_ms;
-    }
-  }
-  s_last_notify_us = received_us;
-
-  if (usable) {
-    ++s_notifications;
-  } else {
-    ++s_malformed;
+  if (s_notify_queue == NULL) {
+    s_notify_queue = xQueueCreate(BT_CLIENT_QUEUE_LEN, sizeof(bt_notify_packet_t));
+    configASSERT(s_notify_queue != NULL);
   }
 }
 
-/**
- * @brief Account one framed write to the radio UART.
- *
- * @param bytes        bytes written.
- * @param received_us  timestamp taken when the notification arrived.
- * @param write_us     duration of the UART write.
- */
-static void diag_note_write(uint16_t bytes, uint32_t received_us, uint32_t write_us)
+void bt_client_notify_push(const uint8_t *data, size_t len)
 {
-  uint32_t latency_us = (uint32_t)esp_timer_get_time() - received_us;
+  if (s_notify_queue == NULL || data == NULL || len == 0 ||
+      len > BT_CLIENT_QUEUE_PAYLOAD) {
+    return;
+  }
 
-  ++s_uart_packets;
-  s_uart_bytes += bytes;
-  if (write_us > s_uart_write_max_us) {
-    s_uart_write_max_us = write_us;
+  bt_notify_packet_t pkt;
+  pkt.len = (uint8_t)len;
+  memcpy(pkt.data, data, len);
+
+  if (xQueueSend(s_notify_queue, &pkt, 0) != pdTRUE) {
+    // Queue full: evict the oldest frame and retry once (latest-frame-wins),
+    // so a BLE burst cannot pile up behind the UART.
+    bt_notify_packet_t oldest;
+    xQueueReceive(s_notify_queue, &oldest, 0);
+    ++s_notify_superseded;
+    xQueueSend(s_notify_queue, &pkt, 0);
   }
-  if (latency_us > s_max_rx_to_uart_us) {
-    s_max_rx_to_uart_us = latency_us;
-  }
-  s_total_rx_to_uart_us += latency_us;
 }
 
-void bt_client_diag_get(bt_client_diag_t *d)
+bool bt_client_notify_pop(uint8_t *data, size_t cap, size_t *len)
 {
-  uint32_t packets = s_uart_packets;
-  d->notifications = s_notifications;
-  d->malformed = s_malformed;
-  d->uart_packets = packets;
-  d->uart_bytes = s_uart_bytes;
-  d->uart_write_max_us = s_uart_write_max_us;
-  d->max_rx_to_uart_us = s_max_rx_to_uart_us;
-  d->avg_rx_to_uart_us = packets ? (uint32_t)(s_total_rx_to_uart_us / packets) : 0;
-  d->max_gap_ms = s_max_gap_ms;
-  d->gaps_over_100_ms = s_gaps_over_100_ms;
+  if (s_notify_queue == NULL || data == NULL || len == NULL) {
+    return false;
+  }
+
+  bt_notify_packet_t pkt;
+  if (xQueueReceive(s_notify_queue, &pkt, 0) != pdTRUE) {
+    return false;
+  }
+  if (cap < pkt.len) {
+    return false;
+  }
+  memcpy(data, pkt.data, pkt.len);
+  *len = pkt.len;
+  return true;
+}
+
+uint32_t bt_client_notify_superseded(void)
+{
+  return s_notify_superseded;
 }
 
 /* ========================================================================== */
@@ -470,12 +457,8 @@ static int bt_gap_event(struct ble_gap_event *event, void *arg)
       if (bt_client_forwardHt &&
           ble_hs_mbuf_to_flat(event->notify_rx.om, buf, sizeof(buf), &len) == 0 && len > 0) {
         uint16_t framed = framed_length(buf, len);
-        uint32_t rx_us = (uint32_t)esp_timer_get_time();
-        diag_note_notify(rx_us, framed != 0);
         if (framed) {
-          uint32_t write_start = (uint32_t)esp_timer_get_time();
-          uart_write_bytes(uart_num, buf, framed);
-          diag_note_write(framed, rx_us, (uint32_t)esp_timer_get_time() - write_start);
+          bt_client_notify_push(buf, framed);
         }
       }
       return 0;
@@ -513,6 +496,7 @@ static void bt_on_sync(void)
 void bt_client_init(void)
 {
   scanned_lock_init();
+  notify_queue_init();
   ESP_LOGI(GATTC_TAG, "Starting Central (NimBLE)");
   ble_hs_cfg.sync_cb = bt_on_sync;
   ble_att_set_preferred_mtu(85);
@@ -873,12 +857,8 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
     case ESP_GATTC_NOTIFY_EVT:
       if (p_data->notify.is_notify && bt_client_forwardHt) {
         uint16_t framed = framed_length(p_data->notify.value, p_data->notify.value_len);
-        uint32_t rx_us = (uint32_t)esp_timer_get_time();
-        diag_note_notify(rx_us, framed != 0);
         if (framed) {
-          uint32_t write_start = (uint32_t)esp_timer_get_time();
-          uart_write_bytes(uart_num, (void *)p_data->notify.value, framed);
-          diag_note_write(framed, rx_us, (uint32_t)esp_timer_get_time() - write_start);
+          bt_client_notify_push(p_data->notify.value, framed);
         }
       }
       break;
@@ -1093,6 +1073,7 @@ void bt_client_disconnect(void)
 void bt_client_init(void)
 {
   scanned_lock_init();
+  notify_queue_init();
   ESP_LOGI(GATTC_TAG, "Starting Central");
 
   esp_err_t ret = esp_ble_gap_register_callback(esp_gap_cb);

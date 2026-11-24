@@ -12,6 +12,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "bt_addr.h"
@@ -133,3 +134,35 @@ uint8_t bt_client_scanned_count(void);
  * @return `true` if the index is valid.
  */
 bool bt_client_scanned_get(uint8_t index, bt_addr_t addr_out, uint8_t *type_out);
+
+/* --- Bounded BLE -> UART notification queue ------------------------------- */
+
+/** Trainer frames buffered between the BLE callback and the UART task. */
+#define BT_CLIENT_QUEUE_LEN 4
+
+/** Maximum payload bytes per queued trainer frame (frames are <= ~20 bytes). */
+#define BT_CLIENT_QUEUE_PAYLOAD 64
+
+/**
+ * @brief Enqueue a trainer frame for forwarding to the UART.
+ *
+ * Non-blocking; called from the BLE notification callback. If the queue is
+ * full the oldest frame is evicted (latest-frame-wins) so a BLE burst cannot
+ * pile up behind the UART and add unbounded latency.
+ *
+ * @param data  frame bytes.
+ * @param len   frame length (must be <= BT_CLIENT_QUEUE_PAYLOAD).
+ */
+void bt_client_notify_push(const uint8_t *data, size_t len);
+
+/**
+ * @brief Dequeue one trainer frame (non-blocking).
+ * @param[out] data  buffer for the frame bytes.
+ * @param[in]  cap   capacity of `data`.
+ * @param[out] len   frame length written.
+ * @return `true` if a frame was dequeued.
+ */
+bool bt_client_notify_pop(uint8_t *data, size_t cap, size_t *len);
+
+/** @return number of frames evicted because the queue was full. */
+uint32_t bt_client_notify_superseded(void);
