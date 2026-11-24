@@ -176,3 +176,10 @@ void bt_client_diag_get(bt_client_diag_t *d);
  * @param write_us  duration of the write in microseconds.
  */
 void bt_client_diag_record_write(uint32_t bytes, uint32_t write_us);
+
+/**
+ * @brief Register the UART task handle so queued trainer frames wake it
+ *        immediately instead of waiting for the next 10 ms poll.
+ * @param uart_task  FreeRTOS task handle of the UART task (`TaskHandle_t`).
+ */
+void bt_client_set_uart_task(void *uart_task);

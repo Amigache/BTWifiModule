@@ -20,6 +20,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 
 #if !defined(USE_NIMBLE)
 #include "esp_bt.h"
@@ -180,6 +181,7 @@ typedef struct {
 } bt_notify_packet_t;
 
 static QueueHandle_t s_notify_queue = NULL;
+static TaskHandle_t s_uart_task = NULL;
 
 /* Diagnostic counters. The BT task writes the notification/queue ones and the
  * UART task writes the UART/latency ones; all are single-writer and only read
@@ -246,6 +248,17 @@ void bt_client_notify_push(const uint8_t *data, size_t len)
   if (depth > s_max_queue_depth) {
     s_max_queue_depth = depth;
   }
+
+  // Wake the UART task so the frame is drained immediately instead of waiting
+  // for the next 10 ms poll.
+  if (s_uart_task != NULL) {
+    xTaskNotifyGive(s_uart_task);
+  }
+}
+
+void bt_client_set_uart_task(void *uart_task)
+{
+  s_uart_task = (TaskHandle_t)uart_task;
 }
 
 bool bt_client_notify_pop(uint8_t *data, size_t cap, size_t *len)

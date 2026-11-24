@@ -376,6 +376,8 @@ void runUARTHead(void *param)
 {
   (void)param;
   status_led_init();
+  // Let the BT callback wake this task as soon as a trainer frame is queued.
+  bt_client_set_uart_task(xTaskGetCurrentTaskHandle());
   ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
   ESP_ERROR_CHECK(
       uart_driver_install(uart_num, UART_RX_BUFFER * 2, UART_RX_BUFFER * 2, 0, NULL, 0));
@@ -488,10 +490,11 @@ void runUARTHead(void *param)
       status_led_update(radio_active, bt_server_connected || bt_client_connected);
     }
 
-    // Delay one tick (10 ms at CONFIG_FREERTOS_HZ=100). Do NOT use
-    // pdMS_TO_TICKS(1) here: it rounds down to 0 ticks (a bare taskYIELD),
+    // Block until a trainer frame is queued (immediate wake) or one tick
+    // elapses (10 ms at CONFIG_FREERTOS_HZ=100) for the regular poll. Do NOT
+    // use pdMS_TO_TICKS(1) here: it rounds down to 0 ticks (a bare taskYIELD),
     // which starves the idle task and triggers the task watchdog.
-    vTaskDelay(1);
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10));
   }
 
   free(data);
