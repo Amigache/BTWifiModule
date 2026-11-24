@@ -12,6 +12,7 @@
 extern void run_cbuf_tests(void);
 extern void run_at_command_tests(void);
 extern void run_bt_addr_tests(void);
+extern void run_trainer_frame_tests(void);
 
 int main(void)
 {
@@ -19,5 +20,6 @@ int main(void)
   run_cbuf_tests();
   run_at_command_tests();
   run_bt_addr_tests();
+  run_trainer_frame_tests();
   return UNITY_END();
 }
