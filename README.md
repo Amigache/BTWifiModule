@@ -121,7 +121,8 @@ src/
   trainer_frame.c/h  Pure FrSky trainer frame parser (host-testable).
 test/             Unit tests (Unity).
 tools/            Bench tooling: sport_sender.py (S.Port injector),
-                  at_bench.py (AT bench) and battery.py (two-board tests).
+                  crsf_sender.py (CRSF injector), at_bench.py (AT bench)
+                  and battery.py (two-board tests).
 boards/           Custom PlatformIO board definitions (Pico, Node32s,
                   ESP32-DEV-38P, ESP32-S3 SuperMini).
 webflash/         Browser flasher page (ESP Web Tools) and its manifests.
@@ -228,6 +229,10 @@ Partial validation (BLE path over USB, no radio yet):
 Both hosts pass the full `tools/at_bench.py` (18 checks) and the phone checks
 described in `doc/BENCH.md`; the radio bay (`J4`), central mode and the
 headtracker are not tested yet.
+
+CRSF telemetry via TelemetryViewer (`0xC8`→`0xEA`) also passes on both BLE
+hosts of the C3 SuperMini, the ESP32-DEV-38P and the Wireless Module, using
+`tools/crsf_sender.py` (see `doc/BENCH.md`).
 
 The other board environments in `platformio.ini` (ESP32 Pico, ESP32-S3
 SuperMini, C3 DevKitM-1, Node32s Wroom32, Radiomaster Pico) are kept for

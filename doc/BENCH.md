@@ -30,6 +30,8 @@ to repeat the same checks for each BLE host (Bluedroid and NimBLE).
 - `espressif32@6.10.0` (ESP-IDF 5.4.0), pinned in `platformio.ini`.
 - Telemetry sender: `tools/sport_sender.py` (needs `pyserial`).
   Run `python tools/sport_sender.py COM10`.
+- CRSF sender: `tools/crsf_sender.py` (needs `pyserial`).
+  Run `python tools/crsf_sender.py COM10`.
 
 ## Flashing
 
@@ -68,6 +70,9 @@ If the board does not reset cleanly, power-cycle it and use the manual
    (`0x7E 0x80 … 0x7E`) and check the log reports `ROLE0 protocol: trainer`;
    re-issue `AT+ROLE0` and inject S.Port or CRSF bytes to see
    `ROLE0 protocol: telemetry`.
+7. CRSF (peripheral): `AT+ROLE0`, run `tools/crsf_sender.py`, connect the app
+   and confirm the CRSF values below. The firmware rewrites the sync `0xC8`
+   to `0xEA` for TelemetryViewer (`BT_CRSF_VIEWER_COMPAT`).
 
 ## AT command bench (automated)
 
@@ -168,6 +173,26 @@ Notes:
 RPM and temperature are sent but the app does not display them.
 GPS satellites are not sent by the sender, so the app shows 0.
 
+## Expected values (CRSF)
+
+`tools/crsf_sender.py` sends these frames with the EdgeTX sync `0xC8`, which
+the firmware rewrites to `0xEA` for TelemetryViewer:
+
+| Field         | Frame      | Sent value          | Displayed      |
+|---------------|------------|---------------------|----------------|
+| Voltage       | Battery    | 126 (0.1 V)         | 12.60 V        |
+| Current       | Battery    | 105 (0.1 A)         | 10.50 A        |
+| Capacity      | Battery    | 1500 mAh            | 1.50 Ah        |
+| GPS altitude  | GPS        | 1321 (m - 1000)     | 321 m          |
+| GPS satellites| GPS        | 9                   | 9              |
+| GPS speed     | GPS        | 830 (0.1 km/h)      | 83 km/h        |
+| Attitude      | Attitude   | 1000 / -2000        | Pitch 5.7°, roll -11.5° |
+| Vario         | Vario      | -250 (cm/s)         | -2.5 m/s       |
+| RSSI          | Link stats | 95 dBm              | 47 %           |
+
+The app shows RSSI as a percentage (`|dBm| / 2`) and derives the battery
+percentage from the capacity used, so those two do not mirror the raw fields.
+
 ## Validation status
 
 Both BLE hosts validated with two modules (A under test, B as peripheral peer):
@@ -176,6 +201,7 @@ Both BLE hosts validated with two modules (A under test, B as peripheral peer):
 |-----------------------------------------|-----------|--------|
 | AT command bench (18 checks)            | PASS      | PASS   |
 | Slave: telemetry to the phone app       | PASS      | PASS   |
+| Slave: CRSF via TelemetryViewer (`0xC8`→`0xEA`) | PASS | PASS |
 | Slave: reconnect (3x, 2 min held)       | PASS      | PASS   |
 | Master: discovery (`AT+DISC?`)          | PASS      | PASS   |
 | Master: connection (`AT+CON`)           | PASS      | PASS   |
@@ -196,6 +222,8 @@ headtracker (no board-to-board master run):
 The ESP32-DEV-38P rows are from the earlier 16-check bench; the C3 rows above
 were re-run with the 18-check version (adds `AT+STATUS`).
 | Slave: telemetry to the phone app       | PASS      | PASS   |
+| Slave: CRSF via TelemetryViewer (`0xC8`→`0xEA`) | PASS | PASS |
+| ROLE0 telemetry auto-detection          | PASS      | PASS   |
 | Headtracker: detect + channels + reset  | PASS      | PASS   |
 
 ### Headtracker + EdgeTX, end to end (TX16S MKII)
@@ -231,6 +259,9 @@ Confirm with the headtracker in central mode: the log prints
 `conn interval=6 units (7.50 ms)` on NimBLE, or `update conn params … conn=20`
 (25 ms) on Bluedroid. `AT+STATUS` additionally reports the BLE→UART latency
 (`rxToUartAvgUs`, tens of microseconds after the queue wake optimization).
+
+As a peripheral the central decides instead: an Android phone negotiated
+11.25 ms (`conn=9`) with the Bluedroid build on the C3 SuperMini.
 
 ## Automated battery
 
@@ -395,10 +426,16 @@ Checked on hardware with both BLE hosts:
 | Connection held with no `DisConnected` | PASS (90 s) | PASS |
 | UART -> notification path (S.Port frames) | PASS (657) | PASS (657) |
 | Telemetry decode in the phone app (nine sensors, right units) | PASS | PASS |
+| CRSF via TelemetryViewer (`0xC8`→`0xEA`) | PASS | PASS |
 | Status LED: red / green / blue / cyan | PASS | PASS |
 
 The BT MAC is derived from the WiFi MAC (`b4:8a:0a:be:e6:38` ->
 `b4:8a:0a:be:e6:3a`).
+
+The tests above run over USB, so the CH442E routes UART0 to the CP2102N and the
+radio bay stays disconnected. The console is disabled on this board, so the
+`ROLE0` classification can only be observed functionally (the app decodes the
+injected S.Port/CRSF frames); the trainer path is validated on the C3.
 
 Note that the `Connected:<addr>` line repeats every 2 s while a peripheral is
 connected (`runBTPeripherial()` in `terminal.c`): that is the firmware keep-alive
