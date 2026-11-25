@@ -280,3 +280,16 @@ Responses: `OK+...`, `Central:<addr>`, `Peripheral:<addr>`, `Connected:<addr>`,
 
 Original project: **dlktdr/BTWifiModule**. Bluetooth telemetry, auto-connect,
 the CRSF passthrough and the NimBLE port by this fork.
+
+Some behaviour in this branch was ported from
+**[Doncuppjr/anchor](https://github.com/Doncuppjr/anchor)**, an independent
+ESP32-C5 implementation of the same FrSky-compatible AT/BLE protocols:
+
+- `AT+ROLE0` trainer/telemetry auto-detection by validating the first FrSky
+  trainer frame (that project's trainer-slave relay).
+- CRSF `0xC8` → `0xEA` address translation for TelemetryViewer.
+- BLE link tuning staged at the MTU event.
+
+These features were adapted to this codebase (host-testable modules, the
+Bluedroid/NimBLE split and the existing AT state machines) rather than taken
+as-is from ANCHOR.
