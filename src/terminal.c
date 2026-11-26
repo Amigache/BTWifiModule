@@ -287,6 +287,9 @@ static void parserATCommand(char *line)
         ESP_LOGI(LOG_UART, "Reset Head Tracker Requested");
         write_str("OK+HTRESET\r\n");
         bt_client_dohtreset();
+        // parserATCommand() paused the trainer passthrough; resume it so the
+        // stream keeps flowing (the link itself is not touched).
+        bt_client_forwardHt = true;
       } else {
         write_str("ERROR");
       }
