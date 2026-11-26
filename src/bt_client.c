@@ -43,6 +43,28 @@
 char *ble_board_type_names[BLE_BOARD_COUNT] = {"Unknown", "CC2540", "PARA",
                                                "HeadTracker", "FlySky", "HM10"};
 
+/**
+ * @brief Length of the framed part of a notification (0 = drop it).
+ *
+ * Trainer and S.Port payloads are 0x7E-delimited. Some trainers notify their
+ * override channels as a block of zeros, and others append padding to the
+ * frame; forwarding that doubles the UART load without carrying anything the
+ * radio can use, which is enough to overrun its receive buffer and make the
+ * trainer signal look lost.
+ */
+static uint16_t framed_length(const uint8_t *buf, uint16_t len)
+{
+  if (len < 3 || buf[0] != 0x7E) {
+    return 0;
+  }
+  for (int i = len - 1; i > 0; i--) {
+    if (buf[i] == 0x7E) {
+      return (uint16_t)(i + 1);
+    }
+  }
+  return len;
+}
+
 volatile bool bt_client_connected = false;
 volatile bool bt_client_scan_complete = true;
 volatile bool bt_client_validslavefound = false;
@@ -192,10 +214,10 @@ static int on_disc_chr(uint16_t conn_handle, const struct ble_gatt_error *error,
 static int on_disc_dsc(uint16_t conn_handle, const struct ble_gatt_error *error,
                        uint16_t chr_val_handle, const struct ble_gatt_dsc *dsc, void *arg);
 
-static void connect_internal(bt_addr_t addr_display, uint8_t type)
+static bool connect_internal(bt_addr_t addr_display, uint8_t type)
 {
   if (bt_client_connected) {
-    return;
+    return false;
   }
   memcpy(rmtbtaddress, addr_display, sizeof(bt_addr_t));
 
@@ -216,7 +238,9 @@ static void connect_internal(bt_addr_t addr_display, uint8_t type)
   int rc = ble_gap_connect(s_own_addr_type, &peer, 30000, &cp, bt_gap_event, NULL);
   if (rc != 0) {
     printf("Unable to connect to %s (rc=%d)\r\n", bt_addr_to_str(saddr, addr_display), rc);
+    return false;
   }
+  return true;
 }
 
 static int on_disc_dsc(uint16_t conn_handle, const struct ble_gatt_error *error,
@@ -226,7 +250,8 @@ static int on_disc_dsc(uint16_t conn_handle, const struct ble_gatt_error *error,
   (void)arg;
 
   if (error->status == 0 && dsc != NULL) {
-    if (uuid16(&dsc->uuid) == BLE_GATT_DSC_CLT_CFG_UUID16) {
+    if (chr_val_handle == s_data_handle &&
+        uuid16(&dsc->uuid) == BLE_GATT_DSC_CLT_CFG_UUID16) {
       s_cccd_handle = dsc->handle;
     }
   } else if (error->status == BLE_HS_EDONE) {
@@ -337,6 +362,7 @@ static int bt_gap_event(struct ble_gap_event *event, void *arg)
         bt_client_scan_complete = false;
         bt_client_validslavefound = false;
         s_found_svc = false;
+        s_cccd_handle = 0;
         bt_client_board_type = BLE_BOARD_UNKNOWN;
         ESP_LOGI(GATTC_TAG, "connected handle=%d", s_conn_handle);
         ble_gattc_disc_all_svcs(s_conn_handle, on_disc_svc, NULL);
@@ -358,7 +384,10 @@ static int bt_gap_event(struct ble_gap_event *event, void *arg)
       uint16_t len = 0;
       if (bt_client_forwardHt &&
           ble_hs_mbuf_to_flat(event->notify_rx.om, buf, sizeof(buf), &len) == 0 && len > 0) {
-        uart_write_bytes(uart_num, buf, len);
+        uint16_t framed = framed_length(buf, len);
+        if (framed) {
+          uart_write_bytes(uart_num, buf, framed);
+        }
       }
       return 0;
     }
@@ -450,10 +479,10 @@ bool bt_client_start_autoconnect(void)
   return true;
 }
 
-void bt_client_connect(bt_addr_t addr)
+bool bt_client_connect(bt_addr_t addr)
 {
   if (bt_client_connected) {
-    return;
+    return false;
   }
   s_autoconnect_active = false;
   bt_client_scan_complete = false;
@@ -464,10 +493,17 @@ void bt_client_connect(bt_addr_t addr)
     char saddr[BT_ADDR_STR_LEN];
     printf("Unable to connect to %s, address not found in storage\r\n",
            bt_addr_to_str(saddr, addr));
-    return;
+    return false;
   }
 
-  connect_internal(addr, type);
+  return connect_internal(addr, type);
+}
+
+void bt_client_abort_connect(void)
+{
+  if (!bt_client_connected) {
+    ble_gap_conn_cancel();
+  }
 }
 
 void bt_client_disconnect(void)
@@ -550,15 +586,16 @@ static void gattc_update_connection_params(esp_bd_addr_t *remote_bda)
   esp_ble_gap_update_conn_params(&conn_params);
 }
 
-static void connect_internal(bt_addr_t addr, uint8_t type)
+static bool connect_internal(bt_addr_t addr, uint8_t type)
 {
   if (bt_client_connected) {
-    return;
+    return false;
   }
   memcpy(rmtbtaddress, addr, sizeof(bt_addr_t));
   char saddr[BT_ADDR_STR_LEN];
   printf("Connecting to %s\r\n", bt_addr_to_str(saddr, addr));
-  esp_ble_gattc_open(gl_profile_tab[PROFILE_A_APP_ID].gattc_if, addr, type, true);
+  esp_err_t ret = esp_ble_gattc_open(gl_profile_tab[PROFILE_A_APP_ID].gattc_if, addr, type, true);
+  return ret == ESP_OK;
 }
 
 static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -739,7 +776,10 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
 
     case ESP_GATTC_NOTIFY_EVT:
       if (p_data->notify.is_notify && bt_client_forwardHt) {
-        uart_write_bytes(uart_num, (void *)p_data->notify.value, p_data->notify.value_len);
+        uint16_t framed = framed_length(p_data->notify.value, p_data->notify.value_len);
+        if (framed) {
+          uart_write_bytes(uart_num, (void *)p_data->notify.value, framed);
+        }
       }
       break;
 
@@ -911,10 +951,10 @@ bool bt_client_start_autoconnect(void)
   return true;
 }
 
-void bt_client_connect(bt_addr_t addr)
+bool bt_client_connect(bt_addr_t addr)
 {
   if (bt_client_connected) {
-    return;
+    return false;
   }
   s_autoconnect_active = false;
   bt_client_scan_complete = false;
@@ -925,10 +965,18 @@ void bt_client_connect(bt_addr_t addr)
     char saddr[BT_ADDR_STR_LEN];
     printf("Unable to connect to %s, address not found in storage\r\n",
            bt_addr_to_str(saddr, addr));
-    return;
+    return false;
   }
 
-  connect_internal(addr, type);
+  return connect_internal(addr, type);
+}
+
+void bt_client_abort_connect(void)
+{
+  // Bluedroid has no explicit API to cancel a connection in progress: the
+  // stack reports the failure through ESP_GATTC_CONNECT_EVT when its own
+  // connect timeout expires. The caller falls back to scanning, which the
+  // stack honours as soon as that event arrives.
 }
 
 void bt_client_disconnect(void)

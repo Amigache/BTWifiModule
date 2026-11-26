@@ -81,10 +81,26 @@ bool bt_client_has_saved_address(void);
 bool bt_client_start_autoconnect(void);
 
 /**
- * @brief Connect to an address (which must be in the last scan list).
+ * @brief Connect to an address previously seen by a scan.
+ *
+ * The peer address type is only known for devices kept in the last scan list.
+ * When the address is unknown (for instance because the peer was off during
+ * the last scan) no attempt is started: the caller must rescan instead of
+ * waiting for a connection event that will never arrive.
+ *
  * @param addr  address in display order.
+ * @return `true` if a connection attempt was started, `false` otherwise.
  */
-void bt_client_connect(bt_addr_t addr);
+bool bt_client_connect(bt_addr_t addr);
+
+/**
+ * @brief Abort a connection attempt that is still in progress.
+ *
+ * Does nothing when a connection is already established or when the host has
+ * no way to cancel the attempt (Bluedroid); in that case the stack's own
+ * connect timeout reports the failure.
+ */
+void bt_client_abort_connect(void);
 
 /** Send the reset command to the headtracker (if connected to one). */
 void bt_client_dohtreset(void);

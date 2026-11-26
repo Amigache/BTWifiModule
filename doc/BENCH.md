@@ -106,8 +106,9 @@ not enough: use a second module running this firmware in peripheral mode.
 5. Data path: the peer's `0xFFF6` notifications must appear on this unit's
    UART as raw S.Port frames (the firmware is a pure passthrough).
 
-Note: `bt_client_connect` only accepts an address present in the last scan, so
-run `AT+DISC?` immediately before `AT+CON`.
+Note: `AT+CON` needs the peer address type, which is only known for devices
+kept in the last scan. When the address is unknown the state machine rescans
+and auto-connects, but running `AT+DISC?` first still connects fastest.
 
 ## Headtracker test (central)
 
@@ -115,15 +116,35 @@ run `AT+DISC?` immediately before `AT+CON`.
 2. `AT+ROLE1`, `AT+CLEAR`, `AT+DISC?`: the headtracker must be listed.
 3. `AT+CON<addr>`: expect `Board:HeadTracker`, then raw channel frames on the
    UART.
-4. `AT+HTRESET`: expect `OK+HTRESET` (only answered for a headtracker board).
+4. `AT+HTRESET`: expect `OK+HTRESET` (only answered for a headtracker board) and
+   the channel frames must keep flowing right after the command (the reset must
+   not pause the passthrough).
 5. Re-run `AT+DISC?` while the module is auto-connecting: it must still return
    `OK+DISCS` ... `OK+DISCE`.
+6. Power the headtracker off and on again: the module must disconnect, keep
+   answering the radio's `AT+CON` retries and reconnect as soon as the tracker
+   advertises again (about 2 s after it finishes booting).
 
 Notes:
 - The scan only keeps devices stronger than `MIN_BLE_RSSI` (`bt_client.h`).
 - The module's receiver is much less sensitive than a phone: the same
   headtracker reads about -80 dBm on the module and -56 dBm on the phone.
   Range is therefore limited by the module antenna.
+
+### Stream shape and announcement budget
+
+- Only the part of each notification delimited by `0x7E` is forwarded. A
+  headtracker also notifies its override channels as a block of zeros between
+  frames (and some append padding); forwarding that doubled the UART load to
+  about 2.5 kB/s and made EdgeTX report "trainer signal lost" every couple of
+  seconds while the BLE link stayed up. With the filter the stream is one
+  16-byte trainer frame every ~14 ms (about 1.3 kB/s).
+- `Connected:` is re-announced at most `ANNOUNCE_REPEATS` (3) times per link, so
+  a radio that missed the first line still recovers without a text burst every
+  2 s competing with the trainer frames.
+- A connection attempt that never starts (unknown peer address) or never
+  completes (`CONNECT_TIMEOUT_US`, 10 s) falls back to scanning instead of
+  leaving the state machine waiting forever.
 
 ## Expected values (telemetry)
 
@@ -164,6 +185,26 @@ headtracker (no board-to-board master run):
 | Slave: telemetry to the phone app       | PASS      | PASS   |
 | Headtracker: detect + channels + reset  | PASS      | PASS   |
 
+### Headtracker + EdgeTX, end to end (TX16S MKII)
+
+ESP32-C3 SuperMini (NimBLE) inside the radio bay, dlktdr BLE headtracker on
+stock 2.40, EdgeTX stock 2.12.5 for the link tests and the
+`feat/sf-headtracker-reset` branch for the reset function.
+
+| Check | Result |
+|---|---|
+| Boot with the HT already on | PASS: connected 0.8 s after the radio powers the module |
+| Boot with the HT off, HT on later | PASS: connects as soon as the HT advertises |
+| HT off -> HT on, radio running | PASS: reconnects in ~2 s, no manual trainer toggle |
+| Stream at the module TX (post-filter) | PASS: 71.7 frames/s, max gap 85 ms over 20 s, ~1.3 kB/s |
+| Stream at the module TX (pre-filter) | 2.5 kB/s: 14 zero bytes between frames plus a ~121 B text burst every 2 s; the radio reported trainer lost/recovered in a loop |
+| `AT+HTRESET` from a Special Function on SH | PASS: instant recenter, stream uninterrupted |
+| Module resets during a radio session | None (`rst:0x1 POWERON` only when the radio powers it) |
+
+The `Connected:` flood and the zeroed override-channel notifications were the
+cause of the "trainer signal lost/recovered" loop; the BLE link never dropped
+(measured on the FTDI tap while the radio was complaining).
+
 ## Automated battery
 
 `python tools/battery.py --a <portA> --b <portB> [--ht <addr>]` drives two
@@ -192,8 +233,9 @@ Last run (A = NimBLE, B = Bluedroid, headtracker at -84 dBm):
 - Phone GATT cache: after many connect/disconnect cycles the Android app can
   stop connecting while the module still advertises. Toggling Bluetooth off/on
   (or rebooting the phone) clears it; the module itself is fine.
-- `AT+CON` only accepts an address present in the last scan, so run
-  `AT+DISC?` immediately before `AT+CON`.
+- `AT+CON` needs the peer address type, which is only known for devices kept
+  in the last scan; with an unknown address the module now rescans instead of
+  waiting forever, but it still reconnects fastest after `AT+DISC?`.
 - `AT+DISC?` now cancels any in-progress scan first, so it also completes
   while the module is auto-connecting (previously it returned `OK+DISCS` with
   no `OK+DISCE`).

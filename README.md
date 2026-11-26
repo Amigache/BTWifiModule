@@ -198,6 +198,12 @@ Hardware validation status of the current firmware. The bench procedure is in
 `n/t` = not tested (the ESP32-DEV-38P was validated against the phone and the
 headtracker, without a board-to-board master run).
 
+The ESP32-C3 SuperMini (NimBLE) was also validated end to end inside a TX16S
+MKII: trainer stream at ~72 frames/s without gaps, automatic reconnect ~2 s
+after the headtracker is power-cycled, and `AT+HTRESET` driven from an EdgeTX
+Special Function (`HT Reset`) recentering the tracker instantly. See
+`doc/BENCH.md` for the measured values.
+
 Partial validation (BLE path over USB, no radio yet):
 
 | Target | BLE host | AT commands | Slave + telemetry | Master | Headtracker |
