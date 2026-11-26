@@ -226,6 +226,9 @@ were re-run with the 18-check version (adds `AT+STATUS`).
 | ROLE0 telemetry auto-detection          | PASS      | PASS   |
 | Headtracker: detect + channels + reset  | PASS      | PASS   |
 
+The ESP32-DEV-38P rows are from the earlier 16-check bench; the C3 rows above
+were re-run with the 18-check version (adds `AT+STATUS`).
+
 ### Headtracker + EdgeTX, end to end (TX16S MKII)
 
 ESP32-C3 SuperMini (NimBLE) inside the radio bay, dlktdr BLE headtracker on
@@ -262,6 +265,26 @@ Confirm with the headtracker in central mode: the log prints
 
 As a peripheral the central decides instead: an Android phone negotiated
 11.25 ms (`conn=9`) with the Bluedroid build on the C3 SuperMini.
+
+### Link tuning and queue validation (C3 SuperMini, both hosts)
+
+Measured after the `feat/anchor-port` rebase, on the bench (FTDI tap) and
+inside the TX16S MKII:
+
+| Check | Bluedroid | NimBLE |
+|---|---|---|
+| `tools/at_bench.py` | 18/18 | 18/18 |
+| Trainer stream, 30 s | 73.1 frames/s, max gap 34 ms | 71.7 frames/s, max gap 57 ms |
+| Gaps > 100 ms | 0 | 0 |
+| `superseded` / `malformed` (`AT+STATUS`) | 0 / 0 | 0 / 0 |
+| Queue depth (`qd`) | 3 | 1 |
+| BLE -> UART latency (avg / max) | 141 µs / 1.5 ms | 74 µs / 0.4 ms |
+| Stream after `AT+STATUS` | 73.0 frames/s | 75.2 frames/s |
+| Headtracker off -> on | reconnects in ~2 s | reconnects in ~2 s |
+
+NimBLE in the radio: 5 min (21,258 frames) with no gap over 100 ms, no
+`DisConnected` and no module reset; three `HT Reset` presses produced three
+`OK+HTRESET` with a max frame gap of 48.5 ms.
 
 ## Automated battery
 
