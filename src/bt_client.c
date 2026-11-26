@@ -226,7 +226,8 @@ static int on_disc_dsc(uint16_t conn_handle, const struct ble_gatt_error *error,
   (void)arg;
 
   if (error->status == 0 && dsc != NULL) {
-    if (uuid16(&dsc->uuid) == BLE_GATT_DSC_CLT_CFG_UUID16) {
+    if (chr_val_handle == s_data_handle &&
+        uuid16(&dsc->uuid) == BLE_GATT_DSC_CLT_CFG_UUID16) {
       s_cccd_handle = dsc->handle;
     }
   } else if (error->status == BLE_HS_EDONE) {
@@ -337,6 +338,7 @@ static int bt_gap_event(struct ble_gap_event *event, void *arg)
         bt_client_scan_complete = false;
         bt_client_validslavefound = false;
         s_found_svc = false;
+        s_cccd_handle = 0;
         bt_client_board_type = BLE_BOARD_UNKNOWN;
         ESP_LOGI(GATTC_TAG, "connected handle=%d", s_conn_handle);
         ble_gattc_disc_all_svcs(s_conn_handle, on_disc_svc, NULL);
