@@ -503,8 +503,8 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
       esp_ble_conn_update_params_t conn_params = {0};
       memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
       conn_params.latency = 0;
-      conn_params.max_int = BT_CON_INT_MIN;
-      conn_params.min_int = BT_CON_INT_MAX;
+      conn_params.min_int = BT_CON_INT_MIN;
+      conn_params.max_int = BT_CON_INT_MAX;
       conn_params.timeout = BT_CON_TIMEOUT;
       ESP_LOGI(GATTS_TAG, "CONNECT_EVT conn_id=%d remote=%02x:%02x:%02x:%02x:%02x:%02x",
                param->connect.conn_id, param->connect.remote_bda[0], param->connect.remote_bda[1],
