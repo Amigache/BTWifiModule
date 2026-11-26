@@ -121,6 +121,11 @@ def run(port, baud, name):
             ['OK+CONNA', 'Connecting to:aabbccddeeff'])
     b.send(b'AT+CLEAR')  # stop the connect attempt before leaving central
 
+    # Project extension: runtime counters of the central data path.
+    b.check('AT+STATUS', b.send(b'AT+STATUS'),
+            ['OK+STATUS', 'rx=', 'uartPkts=', 'gaps100='])
+    b.check('link alive after AT+STATUS', b.send(b'AT+TXPW3'), ['OK+Txpw:0'])
+
     # --- Back to peripheral for the telemetry bench ------------------------
     b.check('AT+ROLE0 (restore)', b.send(b'AT+ROLE0'), ['OK+Role:0', 'Peripheral:'])
 

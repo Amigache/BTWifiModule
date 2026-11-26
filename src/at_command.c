@@ -62,6 +62,9 @@ at_command_parse_t at_command_parse(char *line)
   } else if (strncmp(p, "+DOWNLOAD", 9) == 0) {
     result.command = AT_CMD_DOWNLOAD;
     result.argument = "";
+  } else if (strncmp(p, "+STATUS", 7) == 0) {
+    result.command = AT_CMD_STATUS;
+    result.argument = "";
   }
 
   return result;

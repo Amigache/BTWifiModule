@@ -105,6 +105,24 @@ void bt_client_abort_connect(void);
 /** Send the reset command to the headtracker (if connected to one). */
 void bt_client_dohtreset(void);
 
+/* --- Runtime diagnostics --------------------------------------------------- */
+
+/** Runtime counters for the central (trainer master) data path. */
+typedef struct {
+  uint32_t notifications;      //< framed notifications forwarded
+  uint32_t malformed;          //< notifications dropped (empty or unframed)
+  uint32_t uart_packets;       //< frames written to the UART
+  uint32_t uart_bytes;         //< bytes written to the UART
+  uint32_t uart_write_max_us;  //< max UART write duration (us)
+  uint32_t max_rx_to_uart_us;  //< max BLE -> UART latency (us)
+  uint32_t avg_rx_to_uart_us;  //< average BLE -> UART latency (us)
+  uint32_t max_gap_ms;         //< max gap between notifications (ms)
+  uint32_t gaps_over_100_ms;   //< notification gaps over 100 ms
+} bt_client_diag_t;
+
+/** Snapshot the runtime counters into `d` (torn reads are acceptable). */
+void bt_client_diag_get(bt_client_diag_t *d);
+
 /* --- Thread-safe access to the scanned-device list ------------------------ */
 
 /** @return number of devices kept from the last scan. */
