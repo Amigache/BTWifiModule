@@ -62,6 +62,10 @@
 /** Minimum interval between status LED refreshes. */
 #define STATUS_LED_PERIOD_US (100LL * 1000)
 
+/** How long the central state machine waits for a connection that was
+ *  started (or for the peer to answer) before scanning again. */
+#define CONNECT_TIMEOUT_US (10LL * 1000 * 1000)
+
 /** UART number used to talk to the radio (see board.h). */
 const uart_port_t uart_num = UART_NUM;
 
@@ -87,6 +91,10 @@ typedef enum {
 static role_t curMode = ROLE_UNKNOWN;
 static btcentralstate btCentralState = CENTRAL_STATE_DISCONNECT;
 static btperipheralstate btPeripherialState = PERIPHERIAL_STATE_DISCONNECTED;
+
+/** Timestamp (us) of the last connection attempt started by the state
+ *  machine, used to give up on attempts that never complete. */
+static int64_t connectStartUs;
 
 /** Current remote address (text) and the reusable response buffer. */
 static char rmtaddress[BT_ADDR_STR_LEN] = "000000000000";
@@ -505,6 +513,9 @@ static void runBTCentral(void)
       if (bt_client_connected) {
         btCentralState = CENTRAL_STATE_CONNECTED;
       } else if (bt_client_start_autoconnect()) {
+        // The auto-connect scan runs until the saved device shows up, so it
+        // has no deadline of its own.
+        connectStartUs = 0;
         btCentralState = CENTRAL_STATE_WAITING_CONNECTION;
       }
       break;
@@ -545,8 +556,21 @@ static void runBTCentral(void)
     case CENTRAL_STATE_CONNECT: {
       bt_addr_t addr;
       bt_addr_from_str(addr, rmtaddress);
-      bt_client_connect(addr);
-      btCentralState = CENTRAL_STATE_WAITING_CONNECTION;
+      if (bt_client_connect(addr)) {
+        connectStartUs = esp_timer_get_time();
+        btCentralState = CENTRAL_STATE_WAITING_CONNECTION;
+      } else if (bt_client_connected) {
+        // Already linked (the attempt is unnecessary): announce it.
+        sendCentralConnected();
+      } else if (bt_client_has_saved_address()) {
+        // The peer address type is unknown because the device has not been
+        // seen since the last scan: no attempt was started, so rescan and let
+        // the auto-connect path find it again.
+        ESP_LOGW(LOG_UART, "Connect target not seen yet, rescanning");
+        btCentralState = CENTRAL_STATE_AUTOCONNECT;
+      } else {
+        btCentralState = CENTRAL_STATE_IDLE;
+      }
       break;
     }
 
@@ -561,6 +585,13 @@ static void runBTCentral(void)
         } else {
           btCentralState = CENTRAL_STATE_DISCONNECT;
         }
+      } else if (!bt_client_connected && connectStartUs != 0 &&
+                 esp_timer_get_time() - connectStartUs > CONNECT_TIMEOUT_US) {
+        // The attempt never completed: the peer may be off or out of range.
+        // Cancel it and go back to scanning instead of waiting forever.
+        ESP_LOGW(LOG_UART, "Connection attempt timed out, rescanning");
+        bt_client_abort_connect();
+        btCentralState = CENTRAL_STATE_AUTOCONNECT;
       }
       break;
 

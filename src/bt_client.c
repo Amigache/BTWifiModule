@@ -192,10 +192,10 @@ static int on_disc_chr(uint16_t conn_handle, const struct ble_gatt_error *error,
 static int on_disc_dsc(uint16_t conn_handle, const struct ble_gatt_error *error,
                        uint16_t chr_val_handle, const struct ble_gatt_dsc *dsc, void *arg);
 
-static void connect_internal(bt_addr_t addr_display, uint8_t type)
+static bool connect_internal(bt_addr_t addr_display, uint8_t type)
 {
   if (bt_client_connected) {
-    return;
+    return false;
   }
   memcpy(rmtbtaddress, addr_display, sizeof(bt_addr_t));
 
@@ -216,7 +216,9 @@ static void connect_internal(bt_addr_t addr_display, uint8_t type)
   int rc = ble_gap_connect(s_own_addr_type, &peer, 30000, &cp, bt_gap_event, NULL);
   if (rc != 0) {
     printf("Unable to connect to %s (rc=%d)\r\n", bt_addr_to_str(saddr, addr_display), rc);
+    return false;
   }
+  return true;
 }
 
 static int on_disc_dsc(uint16_t conn_handle, const struct ble_gatt_error *error,
@@ -452,10 +454,10 @@ bool bt_client_start_autoconnect(void)
   return true;
 }
 
-void bt_client_connect(bt_addr_t addr)
+bool bt_client_connect(bt_addr_t addr)
 {
   if (bt_client_connected) {
-    return;
+    return false;
   }
   s_autoconnect_active = false;
   bt_client_scan_complete = false;
@@ -466,10 +468,17 @@ void bt_client_connect(bt_addr_t addr)
     char saddr[BT_ADDR_STR_LEN];
     printf("Unable to connect to %s, address not found in storage\r\n",
            bt_addr_to_str(saddr, addr));
-    return;
+    return false;
   }
 
-  connect_internal(addr, type);
+  return connect_internal(addr, type);
+}
+
+void bt_client_abort_connect(void)
+{
+  if (!bt_client_connected) {
+    ble_gap_conn_cancel();
+  }
 }
 
 void bt_client_disconnect(void)
@@ -552,15 +561,16 @@ static void gattc_update_connection_params(esp_bd_addr_t *remote_bda)
   esp_ble_gap_update_conn_params(&conn_params);
 }
 
-static void connect_internal(bt_addr_t addr, uint8_t type)
+static bool connect_internal(bt_addr_t addr, uint8_t type)
 {
   if (bt_client_connected) {
-    return;
+    return false;
   }
   memcpy(rmtbtaddress, addr, sizeof(bt_addr_t));
   char saddr[BT_ADDR_STR_LEN];
   printf("Connecting to %s\r\n", bt_addr_to_str(saddr, addr));
-  esp_ble_gattc_open(gl_profile_tab[PROFILE_A_APP_ID].gattc_if, addr, type, true);
+  esp_err_t ret = esp_ble_gattc_open(gl_profile_tab[PROFILE_A_APP_ID].gattc_if, addr, type, true);
+  return ret == ESP_OK;
 }
 
 static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -913,10 +923,10 @@ bool bt_client_start_autoconnect(void)
   return true;
 }
 
-void bt_client_connect(bt_addr_t addr)
+bool bt_client_connect(bt_addr_t addr)
 {
   if (bt_client_connected) {
-    return;
+    return false;
   }
   s_autoconnect_active = false;
   bt_client_scan_complete = false;
@@ -927,10 +937,18 @@ void bt_client_connect(bt_addr_t addr)
     char saddr[BT_ADDR_STR_LEN];
     printf("Unable to connect to %s, address not found in storage\r\n",
            bt_addr_to_str(saddr, addr));
-    return;
+    return false;
   }
 
-  connect_internal(addr, type);
+  return connect_internal(addr, type);
+}
+
+void bt_client_abort_connect(void)
+{
+  // Bluedroid has no explicit API to cancel a connection in progress: the
+  // stack reports the failure through ESP_GATTC_CONNECT_EVT when its own
+  // connect timeout expires. The caller falls back to scanning, which the
+  // stack honours as soon as that event arrives.
 }
 
 void bt_client_disconnect(void)
