@@ -79,6 +79,7 @@ response. Run it once per firmware variant.
 | `AT+CLEAR`     | `OK+CLEAR`                                          | central; peripheral none |
 | `AT+BAUD<n>`   | no response (stays at 115200)                       | -                      |
 | `AT+HTRESET`   | `OK+HTRESET`, or `ERROR` unless headtracker board   | -                      |
+| `AT+STATUS`    | `OK+STATUS rx=…` runtime counters                   | -                      |
 | unknown        | no response                                         | -                      |
 
 ## Slave (peripheral) test with a phone peer
@@ -166,13 +167,14 @@ Both BLE hosts validated with two modules (A under test, B as peripheral peer):
 
 | Check                                   | Bluedroid | NimBLE |
 |-----------------------------------------|-----------|--------|
-| AT command bench (16 checks)            | PASS      | PASS   |
+| AT command bench (18 checks)            | PASS      | PASS   |
 | Slave: telemetry to the phone app       | PASS      | PASS   |
 | Slave: reconnect (3x, 2 min held)       | PASS      | PASS   |
 | Master: discovery (`AT+DISC?`)          | PASS      | PASS   |
 | Master: connection (`AT+CON`)           | PASS      | PASS   |
 | Master: data path (peer -> local UART)  | PASS      | PASS   |
 | Headtracker: detect + channels + reset  | PASS      | PASS   |
+| Diagnostics (`AT+STATUS`)               | PASS      | PASS   |
 | Cross-host interop (Bluedroid <-> NimBLE) | PASS    | PASS   |
 
 ESP32-DEV-38P (`ESP32_DEV38P*`), single board against the phone and the
@@ -182,6 +184,9 @@ headtracker (no board-to-board master run):
 |-----------------------------------------|-----------|--------|
 | Boot + advertising                      | PASS      | PASS   |
 | AT command bench (16 checks)            | PASS      | PASS   |
+
+The ESP32-DEV-38P rows are from the earlier 16-check bench; the C3 rows above
+were re-run with the 18-check version (adds `AT+STATUS`).
 | Slave: telemetry to the phone app       | PASS      | PASS   |
 | Headtracker: detect + channels + reset  | PASS      | PASS   |
 

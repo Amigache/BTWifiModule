@@ -211,7 +211,7 @@ Partial validation (BLE path over USB, no radio yet):
 | RadioMaster Wireless Module | Bluedroid | PASS | PASS | n/t | n/t |
 | RadioMaster Wireless Module | NimBLE | PASS | PASS | n/t | n/t |
 
-Both hosts pass the full `tools/at_bench.py` (16 checks) and the phone checks
+Both hosts pass the full `tools/at_bench.py` (18 checks) and the phone checks
 described in `doc/BENCH.md`; the radio bay (`J4`), central mode and the
 headtracker are not tested yet.
 
@@ -245,6 +245,7 @@ module:
 | `AT+CON<addr>` | connect to a device (central) |
 | `AT+CLEAR` | forget the saved device |
 | `AT+HTRESET` | reset the headtracker (BTWifiModule extension) |
+| `AT+STATUS` | dump the central data-path counters (BTWifiModule extension) |
 | `AT+DOWNLOAD` | reboot into the ROM serial bootloader for flashing (BTWifiModule extension) |
 
 `AT+DOWNLOAD` is only available on the RISC-V targets (ESP32-C3, ESP32-S3): it

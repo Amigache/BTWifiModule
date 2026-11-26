@@ -325,6 +325,24 @@ static void parserATCommand(char *line)
       break;
 #endif
 
+    case AT_CMD_STATUS: {
+      // Project extension: dump the runtime counters of the central data path.
+      bt_client_diag_t d;
+      bt_client_diag_get(&d);
+      write_fmt("OK+STATUS rx=%lu malformed=%lu uartPkts=%lu uartBytes=%lu "
+                "wrMaxUs=%lu rxToUartMaxUs=%lu rxToUartAvgUs=%lu gapMaxMs=%lu "
+                "gaps100=%lu\r\n",
+                (unsigned long)d.notifications, (unsigned long)d.malformed,
+                (unsigned long)d.uart_packets, (unsigned long)d.uart_bytes,
+                (unsigned long)d.uart_write_max_us, (unsigned long)d.max_rx_to_uart_us,
+                (unsigned long)d.avg_rx_to_uart_us, (unsigned long)d.max_gap_ms,
+                (unsigned long)d.gaps_over_100_ms);
+      // parserATCommand() paused the trainer passthrough; this command does not
+      // touch the link, so resume it.
+      bt_client_forwardHt = true;
+      break;
+    }
+
     case AT_CMD_UNKNOWN:
     default:
       ESP_LOGE(LOG_UART, "Unknown AT Cmd: %s", line);
