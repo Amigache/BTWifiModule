@@ -43,6 +43,28 @@
 char *ble_board_type_names[BLE_BOARD_COUNT] = {"Unknown", "CC2540", "PARA",
                                                "HeadTracker", "FlySky", "HM10"};
 
+/**
+ * @brief Length of the framed part of a notification (0 = drop it).
+ *
+ * Trainer and S.Port payloads are 0x7E-delimited. Some trainers notify their
+ * override channels as a block of zeros, and others append padding to the
+ * frame; forwarding that doubles the UART load without carrying anything the
+ * radio can use, which is enough to overrun its receive buffer and make the
+ * trainer signal look lost.
+ */
+static uint16_t framed_length(const uint8_t *buf, uint16_t len)
+{
+  if (len < 3 || buf[0] != 0x7E) {
+    return 0;
+  }
+  for (int i = len - 1; i > 0; i--) {
+    if (buf[i] == 0x7E) {
+      return (uint16_t)(i + 1);
+    }
+  }
+  return len;
+}
+
 volatile bool bt_client_connected = false;
 volatile bool bt_client_scan_complete = true;
 volatile bool bt_client_validslavefound = false;
@@ -362,7 +384,10 @@ static int bt_gap_event(struct ble_gap_event *event, void *arg)
       uint16_t len = 0;
       if (bt_client_forwardHt &&
           ble_hs_mbuf_to_flat(event->notify_rx.om, buf, sizeof(buf), &len) == 0 && len > 0) {
-        uart_write_bytes(uart_num, buf, len);
+        uint16_t framed = framed_length(buf, len);
+        if (framed) {
+          uart_write_bytes(uart_num, buf, framed);
+        }
       }
       return 0;
     }
@@ -751,7 +776,10 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
 
     case ESP_GATTC_NOTIFY_EVT:
       if (p_data->notify.is_notify && bt_client_forwardHt) {
-        uart_write_bytes(uart_num, (void *)p_data->notify.value, p_data->notify.value_len);
+        uint16_t framed = framed_length(p_data->notify.value, p_data->notify.value_len);
+        if (framed) {
+          uart_write_bytes(uart_num, (void *)p_data->notify.value, framed);
+        }
       }
       break;
 

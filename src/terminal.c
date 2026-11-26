@@ -66,6 +66,11 @@
  *  started (or for the peer to answer) before scanning again. */
 #define CONNECT_TIMEOUT_US (10LL * 1000 * 1000)
 
+/** Unsolicited "Connected:" re-announcements sent per link. Enough to recover
+ *  from a line the radio missed, few enough to leave the UART to the trainer
+ *  stream. */
+#define ANNOUNCE_REPEATS 3
+
 /** UART number used to talk to the radio (see board.h). */
 const uart_port_t uart_num = UART_NUM;
 
@@ -95,6 +100,9 @@ static btperipheralstate btPeripherialState = PERIPHERIAL_STATE_DISCONNECTED;
 /** Timestamp (us) of the last connection attempt started by the state
  *  machine, used to give up on attempts that never complete. */
 static int64_t connectStartUs;
+
+/** Remaining unsolicited "Connected:" re-announcements for the current link. */
+static int announceLeft;
 
 /** Current remote address (text) and the reusable response buffer. */
 static char rmtaddress[BT_ADDR_STR_LEN] = "000000000000";
@@ -608,11 +616,12 @@ static void runBTCentral(void)
           btCentralState = CENTRAL_STATE_CONNECT;
         }
       } else {
-        // Re-announce periodically in case the radio missed the first message.
+        // Re-announce a few times in case the radio missed the first message.
         static int64_t lastAnnounce = 0;
         int64_t now = esp_timer_get_time();
-        if (now - lastAnnounce > 2000000) {  // every 2 s
+        if (announceLeft > 0 && now - lastAnnounce > 2000000) {  // every 2 s
           lastAnnounce = now;
+          announceLeft--;
           sendCentralConnected();
         }
       }
@@ -638,8 +647,9 @@ static void runBTPeripherial(void)
       } else {
         static int64_t lastAnnounce = 0;
         int64_t now = esp_timer_get_time();
-        if (now - lastAnnounce > 2000000) {  // every 2 s
+        if (announceLeft > 0 && now - lastAnnounce > 2000000) {  // every 2 s
           lastAnnounce = now;
+          announceLeft--;
           sendPeripheralConnected();
         }
       }
@@ -649,6 +659,14 @@ static void runBTPeripherial(void)
 
 static void runBT(void)
 {
+  // Every new link gets a fresh budget of unsolicited re-announcements.
+  static bool linkWasUp = false;
+  bool linkUp = bt_client_connected || bt_server_connected;
+  if (linkUp && !linkWasUp) {
+    announceLeft = ANNOUNCE_REPEATS;
+  }
+  linkWasUp = linkUp;
+
   switch (curMode) {
     case ROLE_BLE_CENTRAL:
       runBTCentral();
